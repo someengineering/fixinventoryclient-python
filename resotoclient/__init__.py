@@ -6,6 +6,7 @@ from enum import Enum
 import jsons
 from dataclasses import dataclass, field
 from datetime import timedelta
+from resotoclient import ca
 
 
 @dataclass
@@ -70,14 +71,17 @@ class ParsedCommand:
     args: Optional[str] = None
 
 
-Json = Dict[str, Any]
-JsonElement = Union[str, int, float, bool, None, Mapping[str, Any], Sequence[Any]]
+JsValue = Union[
+    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
+]
+
+JsObject = Mapping[str, JsValue]
 
 
 @dataclass
 class ParsedCommands:
     commands: List[ParsedCommand]
-    env: Json = field(default_factory=dict)
+    env: JsObject = field(default_factory=dict)
 
 
 class ConfigValidation:
@@ -90,63 +94,102 @@ class ResotoClient:
     The ApiClient interacts with a running core instance via the REST interface.
     """
 
-    def __init__(self, url: str, psk: str):
+    def __init__(self, url: str, psk: Optional[str]):
         self.base_url = url
         self.psk = psk
+        if url.startswith("https"):
+            self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
 
     def _headers(self) -> str:
 
-        headers = {"Content-type": "application/json", "Accept": "application/json"}
+        headers = {"Content-type": "application/json", "Accept": "application/x-ndjson"}
 
         if self.psk:
             encode_jwt_to_headers(headers, {}, self.psk)
 
         return headers
 
+    def _prepare_session(self, session: requests.Session):
+        if self.ca_cert_path:
+            session.verify = self.ca_cert_path
+        session.headers = self._headers()
+
+    def _get(
+        self,
+        path: str,
+        params: Optional[Dict[str, str]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> requests.Response:
+        with requests.Session() as s:
+            self._prepare_session(s)
+            s.headers.update()
+
+            return s.get(self.base_url + path, params=params)
+
+    def _post(
+        self,
+        path: str,
+        json: JsObject,
+        params: Optional[Dict[str, str]] = None,
+        headers: Optional[Dict[str, str]] = None,
+    ) -> requests.Response:
+        with requests.Session() as s:
+            self._prepare_session(s)
+            s.headers.update(headers or {})
+            return s.post(self.base_url + path, json=json, params=params)
+
+    def _put(
+        self, path: str, json: JsObject, params: Optional[Dict[str, str]] = None
+    ) -> requests.Response:
+        with requests.Session() as s:
+            self._prepare_session(s)
+            return s.put(self.base_url + path, json=json, params=params)
+
+    def _patch(self, path: str, json: JsObject) -> requests.Response:
+        with requests.Session() as s:
+            self._prepare_session(s)
+            return s.patch(self.base_url + path, json=json)
+
+    def _delete(self, path: str) -> requests.Response:
+        with requests.Session() as s:
+            self._prepare_session(s)
+            return s.delete(self.base_url + path)
+
     def model(self) -> Model:
-        response = requests.get(self.base_url + "/model", headers=self._headers())
+        response = self._get("/model")
         return jsons.load(response.json(), Model)
 
     def update_model(self, update: List[Kind]) -> Model:
-        response = requests.get(
-            self.base_url + "/model", data=jsons.dump(update), headers=self._headers()
-        )
+        response = self._get("/model", data=jsons.dump(update))
         model_json = response.json()
         model = jsons.load(model_json, Model)
         return model
 
     def list_graphs(self) -> Set[str]:
-        response = requests.get(self.base_url + f"/graph", headers=self._headers())
+        response = self._get(f"/graph")
         return set(response.json())
 
-    def get_graph(self, name: str) -> Optional[Json]:
-        response = requests.get(
-            self.base_url + f"/graph/{name}", headers=self._headers()
-        )
+    def get_graph(self, name: str) -> Optional[JsObject]:
+        response = self._get(f"/graph/{name}")
         return response.json() if response.status_code_code == 200 else None
 
-    def create_graph(self, name: str) -> Json:
-        response = requests.get(
-            self.base_url + f"/graph/{name}", headers=self._headers()
-        )
+    def create_graph(self, name: str) -> JsObject:
+        response = self._get(f"/graph/{name}")
         # root node
         return response.json()
 
     def delete_graph(self, name: str, truncate: bool = False) -> str:
         props = {"truncate": "true"} if truncate else {}
-        response = requests.get(
-            self.base_url + f"/graph/{name}", params=props, headers=self._headers()
-        )
+        response = self._get(f"/graph/{name}", params=props)
         # root node
         return response.text()
 
     def create_node(
-        self, graph: str, parent_node_id: str, node_id: str, node: Json
-    ) -> Json:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
+        self, graph: str, parent_node_id: str, node_id: str, node: JsObject
+    ) -> JsObject:
+        response = self._post(
+            f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
             json=node,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
@@ -154,52 +197,47 @@ class ResotoClient:
             raise AttributeError(response.text())
 
     def patch_node(
-        self, graph: str, node_id: str, node: Json, section: Optional[str] = None
-    ) -> Json:
+        self, graph: str, node_id: str, node: JsObject, section: Optional[str] = None
+    ) -> JsObject:
         section_path = f"/section/{section}" if section else ""
-        response = requests.patch(
-            self.base_url + f"/graph/{graph}/node/{node_id}{section_path}",
+        response = self._patch(
+            f"/graph/{graph}/node/{node_id}{section_path}",
             json=node,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text())
 
-    def get_node(self, graph: str, node_id: str) -> Json:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/node/{node_id}", headers=self._headers()
-        )
+    def get_node(self, graph: str, node_id: str) -> JsObject:
+        response = self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text())
 
     def delete_node(self, graph: str, node_id: str) -> None:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/node/{node_id}", headers=self._headers()
-        )
+        response = self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 204:
             return None
         else:
             raise AttributeError(response.text())
 
-    def patch_nodes(self, graph: str, nodes: List[Json]) -> List[Json]:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/nodes",
+    def patch_nodes(self, graph: str, nodes: List[JsObject]) -> List[JsObject]:
+        response = self._get(
+            f"/graph/{graph}/nodes",
             json=nodes,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text())
 
-    def merge_graph(self, graph: str, update: List[Json]) -> GraphUpdate:
+    def merge_graph(self, graph: str, update: List[JsObject]) -> GraphUpdate:
         js = self.graph_to_json(update)
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/merge", json=js, headers=self._headers()
+        response = self._get(
+            f"/graph/{graph}/merge",
+            json=js,
         )
         if response.status_code == 200:
             return jsons.load(response.json(), GraphUpdate)
@@ -207,24 +245,23 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def add_to_batch(
-        self, graph: str, update: List[Json], batch_id: Optional[str] = None
+        self, graph: str, update: List[JsObject], batch_id: Optional[str] = None
     ) -> Tuple[str, GraphUpdate]:
         js = self.graph_to_json(update)
         props = {"batch_id": batch_id} if batch_id else None
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/batch/merge",
+        response = self._post(
+            f"/graph/{graph}/batch/merge",
             json=js,
             params=props,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.headers["BatchId"], jsons.load(response.json(), GraphUpdate)
         else:
             raise AttributeError(response.text)
 
-    def list_batches(self, graph: str) -> List[Json]:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/batch", headers=self._headers()
+    def list_batches(self, graph: str) -> List[JsObject]:
+        response = self._get(
+            f"/graph/{graph}/batch",
         )
         if response.status_code == 200:
             return response.json()
@@ -232,8 +269,8 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def commit_batch(self, graph: str, batch_id: str) -> None:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/batch/{batch_id}", headers=self._headers()
+        response = self._get(
+            f"/graph/{graph}/batch/{batch_id}",
         )
         if response.status_code == 200:
             return None
@@ -241,19 +278,18 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def abort_batch(self, graph: str, batch_id: str) -> None:
-        response = requests.get(
-            self.base_url + f"/graph/{graph}/batch/{batch_id}", headers=self._headers()
+        response = self._get(
+            f"/graph/{graph}/batch/{batch_id}",
         )
         if response.status_code == 200:
             return None
         else:
             raise AttributeError(response.text)
 
-    def search_graph_raw(self, graph: str, search: str) -> Json:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/search/raw",
+    def search_graph_raw(self, graph: str, search: str) -> JsObject:
+        response = self._post(
+            f"/graph/{graph}/search/raw",
             data=search,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
@@ -261,43 +297,39 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def search_graph_explain(self, graph: str, search: str) -> EstimatedSearchCost:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/search/explain",
+        response = self._post(
+            f"/graph/{graph}/search/explain",
             data=search,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return jsons.load(response.json(), EstimatedSearchCost)
         else:
             raise AttributeError(response.text)
 
-    def search_list(self, graph: str, search: str) -> List[Json]:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/search/list",
+    def search_list(self, graph: str, search: str) -> List[JsObject]:
+        response = self._post(
+            f"/graph/{graph}/search/list",
             data=search,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
-    def search_graph(self, graph: str, search: str) -> List[Json]:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/search/graph",
+    def search_graph(self, graph: str, search: str) -> List[JsObject]:
+        response = self._post(
+            f"/graph/{graph}/search/graph",
             data=search,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
-    def search_aggregate(self, graph: str, search: str) -> List[Json]:
-        response = requests.post(
-            self.base_url + f"/graph/{graph}/search/aggregate",
+    def search_aggregate(self, graph: str, search: str) -> List[JsObject]:
+        response = self._post(
+            f"/graph/{graph}/search/aggregate",
             data=search,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
@@ -305,17 +337,15 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def subscribers(self) -> List[Subscriber]:
-        response = requests.get(
-            self.base_url + f"/subscribers", headers=self._headers()
-        )
+        response = self._get(f"/subscribers")
         if response.status_code == 200:
             return jsons.load(response.json(), List[Subscriber])
         else:
             raise AttributeError(response.text)
 
     def subscribers_for_event(self, event_type: str) -> List[Subscriber]:
-        response = requests.get(
-            self.base_url + f"/subscribers/for/{event_type}", headers=self._headers()
+        response = self._get(
+            f"/subscribers/for/{event_type}",
         )
         if response.status_code == 200:
             return jsons.load(response.json(), List[Subscriber])
@@ -323,8 +353,8 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def subscriber(self, uid: str) -> Optional[Subscriber]:
-        response = requests.get(
-            self.base_url + f"/subscriber/{uid}", headers=self._headers()
+        response = self._get(
+            f"/subscriber/{uid}",
         )
         if response.status_code == 200:
             return jsons.load(response.json(), Subscriber)
@@ -334,10 +364,9 @@ class ResotoClient:
     def update_subscriber(
         self, uid: str, subscriptions: List[Subscription]
     ) -> Optional[Subscriber]:
-        response = requests.put(
-            self.base_url + f"/subscriber/{uid}",
+        response = self._put(
+            f"/subscriber/{uid}",
             json=jsons.dump(subscriptions),
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return jsons.load(response.json(), Subscriber)
@@ -349,10 +378,9 @@ class ResotoClient:
             "timeout": str(int(subscription.timeout.total_seconds())),
             "wait_for_completion": str(subscription.wait_for_completion),
         }
-        response = requests.post(
-            self.base_url + f"/subscriber/{uid}/{subscription.message_type}",
+        response = self._post(
+            f"/subscriber/{uid}/{subscription.message_type}",
             params=props,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return jsons.load(response.json(), Subscriber)
@@ -360,9 +388,8 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def delete_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
-        response = requests.delete(
-            self.base_url + f"/subscriber/{uid}/{subscription.message_type}",
-            headers=self._headers(),
+        response = self._delete(
+            f"/subscriber/{uid}/{subscription.message_type}",
         )
         if response.status_code == 200:
             return jsons.load(response.json(), Subscriber)
@@ -370,8 +397,8 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def delete_subscriber(self, uid: str) -> None:
-        response = requests.get(
-            self.base_url + f"/subscriber/{uid}", headers=self._headers()
+        response = self._get(
+            f"/subscriber/{uid}",
         )
         if response.status_code == 204:
             return None
@@ -380,13 +407,12 @@ class ResotoClient:
 
     def cli_evaluate(
         self, graph: str, command: str, **env: str
-    ) -> List[Tuple[ParsedCommands, List[Json]]]:
+    ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
         props = {"graph": graph, "section": "reported", **env}
-        response = requests.post(
-            self.base_url + f"/cli/evaluate",
+        response = self._post(
+            f"/cli/evaluate",
             data=command,
             params=props,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return [
@@ -401,60 +427,61 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def cli_execute(self, graph: str, command: str, **env: str) -> List[JsonElement]:
+    def cli_execute(self, graph: str, command: str, **env: str) -> List[JsValue]:
         props = {"graph": graph, "section": "reported", **env}
-        headers = self._headers()
-        headers["Content-Type"] = "text/plain"
-        response = requests.post(
-            self.base_url + f"/cli/execute",
+
+        response = self._post(
+            f"/cli/execute",
             data=command,
             params=props,
-            headers=headers,
+            headers={"Content-Type": "text/plain"},
         )
         if response.status_code == 200:
             return response.json()  # type: ignore
         else:
             raise AttributeError(response.text)
 
-    def cli_info(self) -> Json:
-        response = requests.get(self.base_url + f"/cli/info", headers=self._headers())
+    def cli_info(self) -> JsObject:
+        response = self._get(f"/cli/info")
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
     def configs(self) -> List[str]:
-        response = requests.get(self.base_url + f"/configs", headers=self._headers())
+        response = self._get(f"/configs")
         if response.status_code == 200:
             return AccessJson.wrap_list(response.json())  # type: ignore
         else:
             raise AttributeError(response.text)
 
-    def config(self, config_id: str) -> Json:
-        response = requests.get(
-            self.base_url + f"/config/{config_id}", headers=self._headers()
+    def config(self, config_id: str) -> JsObject:
+        response = self._get(
+            f"/config/{config_id}",
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
-    def put_config(self, config_id: str, json: Json, validate: bool = True) -> Json:
+    def put_config(
+        self, config_id: str, json: JsObject, validate: bool = True
+    ) -> JsObject:
         params = {"validate": "true" if validate else "false"}
-        response = requests.put(
-            self.base_url + f"/config/{config_id}",
+        response = self._put(
+            f"/config/{config_id}",
             json=json,
             params=params,
-            headers=self._headers(),
         )
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
-    def patch_config(self, config_id: str, json: Json) -> Json:
-        response = requests.get(
-            self.base_url + f"/config/{config_id}", json=json, headers=self._headers()
+    def patch_config(self, config_id: str, json: JsObject) -> JsObject:
+        response = self._get(
+            f"/config/{config_id}",
+            json=json,
         )
         if response.status_code == 200:
             return response.json()
@@ -462,8 +489,8 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def delete_config(self, config_id: str) -> None:
-        response = requests.get(
-            self.base_url + f"/config/{config_id}", headers=self._headers()
+        response = self._get(
+            f"/config/{config_id}",
         )
         if response.status_code == 204:
             return None
@@ -471,9 +498,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def get_configs_model(self) -> Model:
-        response = requests.get(
-            self.base_url + f"/configs/model", headers=self._headers()
-        )
+        response = self._get(f"/configs/model")
         if response.status_code == 200:
             model_json = response.json()
             model = jsons.load(model_json, Model)
@@ -482,48 +507,42 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def update_configs_model(self, update: List[Kind]) -> Model:
-        response = requests.patch(
-            self.base_url + "/configs/model",
+        response = self._patch(
+            "/configs/model",
             json=jsons.dump(update),
-            headers=self._headers(),
         )
         model_json = response.json()
         model = jsons.load(model_json, Model)
         return model
 
     def list_configs_validation(self) -> List[str]:
-        response = requests.get(
-            self.base_url + "/configs/validation", headers=self._headers()
+        response = self._get(
+            "/configs/validation",
         )
         return response.json()  # type: ignore
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
-        response = requests.get(
-            self.base_url + f"/config/{cfg_id}/validation", headers=self._headers()
+        response = self._get(
+            f"/config/{cfg_id}/validation",
         )
         return jsons.load(response.json(), ConfigValidation)
 
     def put_config_validation(self, cfg: ConfigValidation) -> ConfigValidation:
-        response = requests.put(
-            self.base_url + f"/config/{cfg.id}/validation",
+        response = self._put(
+            f"/config/{cfg.id}/validation",
             json=jsons.dump(cfg),
-            headers=self._headers(),
         )
         return jsons.load(response.json(), ConfigValidation)
 
     def ping(self) -> str:
-        response = requests.get(
-            self.base_url + f"/system/ping", headers=self._headers()
-        )
+        response = self._get(f"/system/ping")
         if response.status_code == 200:
             return response.text
         else:
             raise AttributeError(response.text)
 
     def ready(self) -> str:
-        response = requests.get(
-            self.base_url + f"/system/ready", headers=self._headers()
-        )
+        response = self._get(f"/system/ready")
         if response.status_code == 200:
             return response.text
         else:

@@ -52,3 +52,49 @@ def encode_jwt_to_headers(
         {"Authorization": f"{scheme} {encode_jwt(payload, psk, headers, expire_in)}"}
     )
     return http_headers
+
+
+def decode_jwt(
+    encoded_jwt: str, psk: str, options: Optional[Dict[str, Any]] = None
+) -> dict:
+    """Decode a JWT using a key derived from a pre-shared-key and a salt stored
+    in the JWT headers.
+    """
+    salt_encoded = jwt.get_unverified_header(encoded_jwt).get("salt")
+    salt = base64.standard_b64decode(salt_encoded)
+    key, _ = key_from_psk(psk, salt)
+    return jwt.decode(encoded_jwt, key, algorithms=["HS256"], options=options)
+
+
+def decode_jwt_from_headers(
+    http_headers: Dict[str, str],
+    psk: str,
+    scheme: str = "Bearer",
+    options: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, str]]:
+    """Retrieves the Authorization header from a http headers dictionary and
+    passes it to `decode_jwt_from_header_value()` to return the decoded payload.
+    """
+    authorization_header = {
+        str(k).capitalize(): v for k, v in http_headers.items()
+    }.get("Authorization")
+    if authorization_header is None:
+        return None
+    return decode_jwt_from_header_value(authorization_header, psk, scheme, options)
+
+
+def decode_jwt_from_header_value(
+    authorization_header: str,
+    psk: str,
+    scheme: str = "Bearer",
+    options: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, str]]:
+    """Decodes a JWT payload from a http Authorization header value."""
+    if (
+        len(authorization_header) <= len(scheme) + 1
+        or str(authorization_header[0 : len(scheme)]).lower() != scheme.lower()
+        or authorization_header[len(scheme) : len(scheme) + 1] != " "
+    ):
+        return None
+    encoded_jwt = authorization_header[len(scheme) + 1 :]
+    return decode_jwt(encoded_jwt, psk, options)
