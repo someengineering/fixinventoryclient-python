@@ -32,7 +32,7 @@ def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
         ca_cert = load_cert_from_bytes(r.content)
         if psk:
             # noinspection PyTypeChecker
-            jwt = decode_jwt_from_headers(r.headers, psk)
+            jwt = decode_jwt_from_headers(dict(r.headers), psk)
             if jwt is None:
                 raise ValueError(
                     "Failed to decode JWT - was resotocore started without PSK?"

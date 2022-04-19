@@ -1,7 +1,8 @@
 import requests
+from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
-from typing import Any, Dict, Iterator, Set, Optional, List, Tuple
-import jsons
+from typing import Any, Dict, Iterator, Set, Optional, List, Tuple, Sequence
+import jsons  # type: ignore
 from resotoclient import ca
 from resotoclient.models import *
 
@@ -18,7 +19,7 @@ class ResotoClient:
         if url.startswith("https"):
             self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
 
-    def _headers(self) -> str:
+    def _headers(self) -> Dict[str, str]:
 
         headers = {"Content-type": "application/json", "Accept": "application/json"}
 
@@ -27,10 +28,10 @@ class ResotoClient:
 
         return headers
 
-    def _prepare_session(self, session: requests.Session):
+    def _prepare_session(self, session: requests.Session) -> None:
         if self.ca_cert_path:
             session.verify = self.ca_cert_path
-        session.headers = self._headers()
+        session.headers = CaseInsensitiveDict(self._headers())
 
     def _get(
         self,
@@ -50,7 +51,7 @@ class ResotoClient:
     def _post(
         self,
         path: str,
-        json: Optional[JsObject] = None,
+        json: Optional[JsValue] = None,
         data: Optional[Any] = None,
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
@@ -65,28 +66,30 @@ class ResotoClient:
             return s.post(self.base_url + path, data=data, json=json, params=params)
 
     def _put(
-        self, path: str, json: JsObject, params: Optional[Dict[str, str]] = None
+        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
             return s.put(self.base_url + path, json=json, params=params)
 
-    def _patch(self, path: str, json: JsObject) -> requests.Response:
+    def _patch(self, path: str, json: JsValue) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
             return s.patch(self.base_url + path, json=json)
 
-    def _delete(self, path: str) -> requests.Response:
+    def _delete(
+        self, path: str, params: Optional[Dict[str, str]] = None
+    ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            return s.delete(self.base_url + path)
+            return s.delete(self.base_url + path, params=params)
 
     def model(self) -> Model:
         response = self._get("/model")
         return jsons.load(response.json(), Model)
 
     def update_model(self, update: List[Kind]) -> Model:
-        response = self._get("/model", data=jsons.dump(update))
+        response = self._patch("/model", json=jsons.dump(update))
         model_json = response.json()
         model = jsons.load(model_json, Model)
         return model
@@ -100,15 +103,15 @@ class ResotoClient:
         return response.json() if response.status_code == 200 else None
 
     def create_graph(self, name: str) -> JsObject:
-        response = self._get(f"/graph/{name}")
+        response = self._post(f"/graph/{name}")
         # root node
         return response.json()
 
     def delete_graph(self, name: str, truncate: bool = False) -> str:
         props = {"truncate": "true"} if truncate else {}
-        response = self._get(f"/graph/{name}", params=props)
+        response = self._delete(f"/graph/{name}", params=props)
         # root node
-        return response.text()
+        return response.text
 
     def create_node(
         self, graph: str, parent_node_id: str, node_id: str, node: JsObject
@@ -120,7 +123,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text())
+            raise AttributeError(response.text)
 
     def patch_node(
         self, graph: str, node_id: str, node: JsObject, section: Optional[str] = None
@@ -133,37 +136,36 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text())
+            raise AttributeError(response.text)
 
     def get_node(self, graph: str, node_id: str) -> JsObject:
         response = self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text())
+            raise AttributeError(response.text)
 
     def delete_node(self, graph: str, node_id: str) -> None:
-        response = self._get(f"/graph/{graph}/node/{node_id}")
+        response = self._delete(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 204:
             return None
         else:
-            raise AttributeError(response.text())
+            raise AttributeError(response.text)
 
-    def patch_nodes(self, graph: str, nodes: List[JsObject]) -> List[JsObject]:
-        response = self._get(
+    def patch_nodes(self, graph: str, nodes: Sequence[JsObject]) -> List[JsObject]:
+        response = self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
         )
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text())
+            raise AttributeError(response.text)
 
     def merge_graph(self, graph: str, update: List[JsObject]) -> GraphUpdate:
-        js = self.graph_to_json(update)
-        response = self._get(
+        response = self._patch(
             f"/graph/{graph}/merge",
-            json=js,
+            json=update,
         )
         if response.status_code == 200:
             return jsons.load(response.json(), GraphUpdate)
@@ -173,11 +175,10 @@ class ResotoClient:
     def add_to_batch(
         self, graph: str, update: List[JsObject], batch_id: Optional[str] = None
     ) -> Tuple[str, GraphUpdate]:
-        js = self.graph_to_json(update)
         props = {"batch_id": batch_id} if batch_id else None
         response = self._post(
             f"/graph/{graph}/batch/merge",
-            json=js,
+            json=update,
             params=props,
         )
         if response.status_code == 200:
@@ -195,7 +196,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def commit_batch(self, graph: str, batch_id: str) -> None:
-        response = self._get(
+        response = self._post(
             f"/graph/{graph}/batch/{batch_id}",
         )
         if response.status_code == 200:
@@ -204,7 +205,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def abort_batch(self, graph: str, batch_id: str) -> None:
-        response = self._get(
+        response = self._delete(
             f"/graph/{graph}/batch/{batch_id}",
         )
         if response.status_code == 200:
@@ -316,7 +317,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def delete_subscriber(self, uid: str) -> None:
-        response = self._get(
+        response = self._delete(
             f"/subscriber/{uid}",
         )
         if response.status_code == 204:
@@ -399,7 +400,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def patch_config(self, config_id: str, json: JsObject) -> JsObject:
-        response = self._get(
+        response = self._patch(
             f"/config/{config_id}",
             json=json,
         )
@@ -409,7 +410,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def delete_config(self, config_id: str) -> None:
-        response = self._get(
+        response = self._delete(
             f"/config/{config_id}",
         )
         if response.status_code == 204:
