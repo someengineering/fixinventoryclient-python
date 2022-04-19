@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Mapping, Sequence, Union, Dict, Any
+from typing import List, Optional, Mapping, Sequence, Union, Dict
 from datetime import timedelta
 from enum import Enum
 
-JsValue = Union[str, int, float, bool, None, Mapping[str, Any], Sequence[Any]]
+JsValue = Union[
+    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
+]
 
 JsObject = Mapping[str, JsValue]
 

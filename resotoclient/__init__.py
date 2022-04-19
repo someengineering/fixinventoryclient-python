@@ -2,9 +2,21 @@ import requests
 from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import Any, Dict, Iterator, Set, Optional, List, Tuple, Sequence
-import jsons  # type: ignore
+from resotoclient.json_utils import json_load, json_loadb, json_dump
 from resotoclient import ca
-from resotoclient.models import *
+from resotoclient.models import (
+    Subscriber,
+    Subscription,
+    ParsedCommand,
+    ParsedCommands,
+    GraphUpdate,
+    EstimatedSearchCost,
+    ConfigValidation,
+    JsObject,
+    JsValue,
+    Model,
+    Kind,
+)
 
 
 class ResotoClient:
@@ -86,12 +98,12 @@ class ResotoClient:
 
     def model(self) -> Model:
         response = self._get("/model")
-        return jsons.load(response.json(), Model)
+        return json_load(response.json(), Model)
 
     def update_model(self, update: List[Kind]) -> Model:
-        response = self._patch("/model", json=jsons.dump(update))
+        response = self._patch("/model", json=json_dump(update, List[Kind]))
         model_json = response.json()
-        model = jsons.load(model_json, Model)
+        model = json_load(model_json, Model)
         return model
 
     def list_graphs(self) -> Set[str]:
@@ -168,7 +180,7 @@ class ResotoClient:
             json=update,
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), GraphUpdate)
+            return json_load(response.json(), GraphUpdate)
         else:
             raise AttributeError(response.text)
 
@@ -182,7 +194,7 @@ class ResotoClient:
             params=props,
         )
         if response.status_code == 200:
-            return response.headers["BatchId"], jsons.load(response.json(), GraphUpdate)
+            return response.headers["BatchId"], json_load(response.json(), GraphUpdate)
         else:
             raise AttributeError(response.text)
 
@@ -229,21 +241,21 @@ class ResotoClient:
             data=search,
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), EstimatedSearchCost)
+            return json_load(response.json(), EstimatedSearchCost)
         else:
             raise AttributeError(response.text)
 
     def search_list(self, graph: str, search: str) -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/list", data=search, stream=True)
         if response.status_code == 200:
-            return map(jsons.loadb, response.iter_lines())
+            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
     def search_graph(self, graph: str, search: str) -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/graph", data=search, stream=True)
         if response.status_code == 200:
-            return map(jsons.loadb, response.iter_lines())
+            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -252,14 +264,14 @@ class ResotoClient:
             f"/graph/{graph}/search/aggregate", data=search, stream=True
         )
         if response.status_code == 200:
-            return map(jsons.loadb, response.iter_lines())
+            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
     def subscribers(self) -> List[Subscriber]:
         response = self._get(f"/subscribers")
         if response.status_code == 200:
-            return jsons.load(response.json(), List[Subscriber])
+            return json_load(response.json(), List[Subscriber])
         else:
             raise AttributeError(response.text)
 
@@ -268,7 +280,7 @@ class ResotoClient:
             f"/subscribers/for/{event_type}",
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), List[Subscriber])
+            return json_load(response.json(), List[Subscriber])
         else:
             raise AttributeError(response.text)
 
@@ -277,7 +289,7 @@ class ResotoClient:
             f"/subscriber/{uid}",
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), Subscriber)
+            return json_load(response.json(), Subscriber)
         else:
             return None
 
@@ -286,10 +298,10 @@ class ResotoClient:
     ) -> Optional[Subscriber]:
         response = self._put(
             f"/subscriber/{uid}",
-            json=jsons.dump(subscriptions),
+            json=json_dump(subscriptions),
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), Subscriber)
+            return json_load(response.json(), Subscriber)
         else:
             raise AttributeError(response.text)
 
@@ -303,7 +315,7 @@ class ResotoClient:
             params=props,
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), Subscriber)
+            return json_load(response.json(), Subscriber)
         else:
             raise AttributeError(response.text)
 
@@ -312,7 +324,7 @@ class ResotoClient:
             f"/subscriber/{uid}/{subscription.message_type}",
         )
         if response.status_code == 200:
-            return jsons.load(response.json(), Subscriber)
+            return json_load(response.json(), Subscriber)
         else:
             raise AttributeError(response.text)
 
@@ -338,7 +350,7 @@ class ResotoClient:
             return [
                 (
                     ParsedCommands(
-                        jsons.load(json["parsed"], List[ParsedCommand]), json["env"]
+                        json_load(json["parsed"], List[ParsedCommand]), json["env"]
                     ),
                     json["execute"],
                 )
@@ -358,7 +370,7 @@ class ResotoClient:
             stream=True,
         )
         if response.status_code == 200:
-            return map(jsons.loadb, response.iter_lines())
+            return map(lambda l: json_loadb(l, Any), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -372,7 +384,7 @@ class ResotoClient:
     def configs(self) -> Iterator[str]:
         response = self._get(f"/configs", stream=True)
         if response.status_code == 200:
-            return map(jsons.loadb, response.iter_lines())
+            return map(lambda l: json_loadb(l, Any), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -422,7 +434,7 @@ class ResotoClient:
         response = self._get(f"/configs/model")
         if response.status_code == 200:
             model_json = response.json()
-            model = jsons.load(model_json, Model)
+            model = json_load(model_json, Model)
             return model
         else:
             raise AttributeError(response.text)
@@ -430,10 +442,10 @@ class ResotoClient:
     def update_configs_model(self, update: List[Kind]) -> Model:
         response = self._patch(
             "/configs/model",
-            json=jsons.dump(update),
+            json=json_dump(update),
         )
         model_json = response.json()
-        model = jsons.load(model_json, Model)
+        model = json_load(model_json, Model)
         return model
 
     def list_configs_validation(self) -> Iterator[str]:
@@ -441,20 +453,20 @@ class ResotoClient:
             "/configs/validation",
             stream=True,
         )
-        return map(jsons.loadb, response.iter_lines())
+        return map(lambda l: json_loadb(l, Any), response.iter_lines())
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
         response = self._get(
             f"/config/{cfg_id}/validation",
         )
-        return jsons.load(response.json(), ConfigValidation)
+        return json_load(response.json(), ConfigValidation)
 
     def put_config_validation(self, cfg: ConfigValidation) -> ConfigValidation:
         response = self._put(
             f"/config/{cfg.id}/validation",
-            json=jsons.dump(cfg),
+            json=json_dump(cfg),
         )
-        return jsons.load(response.json(), ConfigValidation)
+        return json_load(response.json(), ConfigValidation)
 
     def ping(self) -> str:
         response = self._get(f"/system/ping")

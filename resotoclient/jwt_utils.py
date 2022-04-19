@@ -60,7 +60,7 @@ def decode_jwt(
     """Decode a JWT using a key derived from a pre-shared-key and a salt stored
     in the JWT headers.
     """
-    salt_encoded = jwt.get_unverified_header(encoded_jwt).get("salt")  # type: ignore
+    salt_encoded: bytes = jwt.get_unverified_header(encoded_jwt).get("salt")  # type: ignore
     salt = base64.standard_b64decode(salt_encoded)
     key, _ = key_from_psk(psk, salt)
     return jwt.decode(encoded_jwt, key, algorithms=["HS256"], options=options or {})  # type: ignore
