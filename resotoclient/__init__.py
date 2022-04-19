@@ -1,92 +1,10 @@
+from tkinter.tix import Tree
 import requests
 from resotoclient.jwt_utils import encode_jwt_to_headers
-from io import StringIO
-from typing import Any, Dict, Set, Optional, List, Tuple, Union, Sequence, Any, Mapping
-from enum import Enum
+from typing import Any, Dict, Iterator, Set, Optional, List, Tuple
 import jsons
-from dataclasses import dataclass, field
-from datetime import timedelta
 from resotoclient import ca
-
-
-@dataclass
-class Kind:
-    fqn: str
-    runtime_kind: Optional[str]
-
-
-@dataclass
-class Model:
-    kinds: List[Kind]
-
-
-@dataclass
-class GraphUpdate:
-    nodes_created: int
-    nodes_updates: int
-    nodes_deleted: int
-    edges_created: int
-    edges_updated: int
-    edges_deleted: int
-
-
-class EstimatedQueryCostRating(Enum):
-    simple = 1
-    complex = 2
-    bad = 3
-
-
-@dataclass
-class EstimatedSearchCost:
-    # Absolute number that shows the cost of this query. See rating for an interpreted number.
-    estimated_cost: int
-    # This is the estimated number of items returned for this query.
-    # Please note: it is computed based on query statistics and heuristics and does not reflect the real number.
-    estimated_nr_items: int
-    # This is the number of available nodes in the graph.
-    available_nr_items: int
-    # Indicates, if a full collection scan is required.
-    # This means, that the query does not take advantage of any indexes!
-    full_collection_scan: bool
-    # The rating of this query
-    rating: EstimatedQueryCostRating
-
-
-@dataclass
-class Subscription:
-    message_type: str
-    wait_for_completion: bool = field(default=True)
-    timeout: timedelta = field(default=timedelta(seconds=60))
-
-
-@dataclass
-class Subscriber:
-    id: str
-    subscriptions: Dict[str, Subscription] = field(default_factory=dict)
-
-
-@dataclass
-class ParsedCommand:
-    cmd: str
-    args: Optional[str] = None
-
-
-JsValue = Union[
-    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
-]
-
-JsObject = Mapping[str, JsValue]
-
-
-@dataclass
-class ParsedCommands:
-    commands: List[ParsedCommand]
-    env: JsObject = field(default_factory=dict)
-
-
-class ConfigValidation:
-    id: str
-    external_validation: bool = False
+from resotoclient.models import *
 
 
 class ResotoClient:
@@ -97,12 +15,13 @@ class ResotoClient:
     def __init__(self, url: str, psk: Optional[str]):
         self.base_url = url
         self.psk = psk
+        self.ca_cert_path = None
         if url.startswith("https"):
             self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
 
     def _headers(self) -> str:
 
-        headers = {"Content-type": "application/json", "Accept": "application/x-ndjson"}
+        headers = {"Content-type": "application/json", "Accept": "application/json"}
 
         if self.psk:
             encode_jwt_to_headers(headers, {}, self.psk)
@@ -119,24 +38,32 @@ class ResotoClient:
         path: str,
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
+        stream: bool = False,
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            s.headers.update()
-
+            s.headers.update(headers or {})
+            if stream:
+                s.stream = True
+                s.headers.update({"Accept": "application/x-ndjson"})
             return s.get(self.base_url + path, params=params)
 
     def _post(
         self,
         path: str,
-        json: JsObject,
+        json: Optional[JsObject] = None,
+        data: Optional[Any] = None,
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
+        stream: bool = False,
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
             s.headers.update(headers or {})
-            return s.post(self.base_url + path, json=json, params=params)
+            if stream:
+                s.stream = True
+                s.headers.update({"Accept": "application/x-ndjson"})
+            return s.post(self.base_url + path, data=data, json=json, params=params)
 
     def _put(
         self, path: str, json: JsObject, params: Optional[Dict[str, str]] = None
@@ -171,7 +98,7 @@ class ResotoClient:
 
     def get_graph(self, name: str) -> Optional[JsObject]:
         response = self._get(f"/graph/{name}")
-        return response.json() if response.status_code_code == 200 else None
+        return response.json() if response.status_code == 200 else None
 
     def create_graph(self, name: str) -> JsObject:
         response = self._get(f"/graph/{name}")
@@ -306,33 +233,26 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_list(self, graph: str, search: str) -> List[JsObject]:
-        response = self._post(
-            f"/graph/{graph}/search/list",
-            data=search,
-        )
+    def search_list(self, graph: str, search: str) -> Iterator[JsObject]:
+        response = self._post(f"/graph/{graph}/search/list", data=search, stream=True)
         if response.status_code == 200:
-            return response.json()
+            return map(jsons.loadb, response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_graph(self, graph: str, search: str) -> List[JsObject]:
-        response = self._post(
-            f"/graph/{graph}/search/graph",
-            data=search,
-        )
+    def search_graph(self, graph: str, search: str) -> Iterator[JsObject]:
+        response = self._post(f"/graph/{graph}/search/graph", data=search, stream=True)
         if response.status_code == 200:
-            return response.json()
+            return map(jsons.loadb, response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_aggregate(self, graph: str, search: str) -> List[JsObject]:
+    def search_aggregate(self, graph: str, search: str) -> Iterator[JsObject]:
         response = self._post(
-            f"/graph/{graph}/search/aggregate",
-            data=search,
+            f"/graph/{graph}/search/aggregate", data=search, stream=True
         )
         if response.status_code == 200:
-            return response.json()
+            return map(jsons.loadb, response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -427,7 +347,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def cli_execute(self, graph: str, command: str, **env: str) -> List[JsValue]:
+    def cli_execute(self, graph: str, command: str, **env: str) -> Iterator[JsValue]:
         props = {"graph": graph, "section": "reported", **env}
 
         response = self._post(
@@ -435,9 +355,10 @@ class ResotoClient:
             data=command,
             params=props,
             headers={"Content-Type": "text/plain"},
+            stream=True,
         )
         if response.status_code == 200:
-            return response.json()  # type: ignore
+            return map(jsons.loadb, response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -448,10 +369,10 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def configs(self) -> List[str]:
-        response = self._get(f"/configs")
+    def configs(self) -> Iterator[str]:
+        response = self._get(f"/configs", stream=True)
         if response.status_code == 200:
-            return AccessJson.wrap_list(response.json())  # type: ignore
+            return map(jsons.loadb, response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -515,11 +436,12 @@ class ResotoClient:
         model = jsons.load(model_json, Model)
         return model
 
-    def list_configs_validation(self) -> List[str]:
+    def list_configs_validation(self) -> Iterator[str]:
         response = self._get(
             "/configs/validation",
+            stream=True,
         )
-        return response.json()  # type: ignore
+        return map(jsons.loadb, response.iter_lines())
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
         response = self._get(
@@ -542,7 +464,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def ready(self) -> str:
-        response = self._get(f"/system/ready")
+        response = self._get(f"/system/ready", headers={"Accept": "text/plain"})
         if response.status_code == 200:
             return response.text
         else:
