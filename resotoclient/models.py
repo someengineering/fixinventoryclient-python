@@ -3,11 +3,19 @@ from typing import List, Optional, Mapping, Sequence, Union, Dict
 from datetime import timedelta
 from enum import Enum
 
+JsValue = Union[
+    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
+]
+
+JsObject = Mapping[str, JsValue]
+
 
 @dataclass
 class Kind:
     fqn: str
     runtime_kind: Optional[str]
+    properties: Optional[List[JsObject]]
+    bases: Optional[List[str]]
 
 
 @dataclass
@@ -64,13 +72,6 @@ class Subscriber:
 class ParsedCommand:
     cmd: str
     args: Optional[str] = None
-
-
-JsValue = Union[
-    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
-]
-
-JsObject = Mapping[str, JsValue]
 
 
 @dataclass

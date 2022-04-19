@@ -1,4 +1,3 @@
-from tkinter.tix import Tree
 import requests
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import Any, Dict, Iterator, Set, Optional, List, Tuple
