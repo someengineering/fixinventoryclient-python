@@ -10,9 +10,7 @@ repository = "https://github.com/someengineering/resoto-client-python"
 packages = [
     { include = "resotoclient" },
 ]
-classifiers = [
-    "Development Status :: 3 - Alpha",
-]
+
 
 [tool.poetry.urls]
 Changelog = "https://github.com/someengineering/resoto-client-python/releases"
