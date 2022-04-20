@@ -7,30 +7,30 @@ from resotoclient import ResotoClient
 # Resoto is able to verify the TLS certificate.
 client = ResotoClient(url="https://localhost:8900", psk=None)
 
+
+def wait_for_resotocore(client: ResotoClient):
+    while True:
+        try:
+            client.ready()
+            break
+        except Exception:
+            sleep(0.5)
+
+
 # Get the configuration of the resotocore.
 conf = client.config("resoto.core")
 print("resotocore config before patch:")
 print(conf)
-# Now we patch the loglevel in runtime. This will trigger a restart of resotocore.
+# Now we patch the loglevel in runtime. This will trigger a hot-reload of the config.
 client.patch_config("resoto.core", {"resotocore": {"runtime": {"log_level": "debug"}}})
-# resotocore restarts after config change. Wait for it to be ready.
-while True:
-    try:
-        conf = client.config("resoto.core")
-        print("resotocore config after patch:")
-        print(conf)
-        break
-    except Exception as e:
-        sleep(0.5)
+# resotocore might restart after the config was changed. Let's wait for it to be ready.
+wait_for_resotocore(client)
+print("resotocore config after patch:")
+print(client.config("resoto.core"))
 
 # reverting the change back to the original config
 client.patch_config("resoto.core", {"resotocore": {"runtime": {"log_level": "info"}}})
-# Wait for resotocore restart.
-while True:
-    try:
-        conf = client.config("resoto.core")
-        print("resotocore config after revert:")
-        print(conf)
-        break
-    except Exception as e:
-        sleep(0.5)
+# Wait for resotocore readiness.
+wait_for_resotocore(client)
+print("resotocore config after revert:")
+print(client.config("resoto.core"))
