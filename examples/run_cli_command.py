@@ -12,7 +12,9 @@ ping = client.cli_execute("resoto", "echo ping")
 print(list(ping))
 
 # find all instances and return a csv list with them.
-instances_csv = client.cli_execute("resoto", "search is(instance) | list --csv")
+instances_csv = client.cli_execute(
+    "resoto", "search is(instance) | tail 5 | list --csv"
+)
 
 for instance in instances_csv:
     print(instance)
