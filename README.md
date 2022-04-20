@@ -4,7 +4,7 @@ Python client for Resoto
 ## Installation
 
 ```bash
-    pip install resoto-client-python
+    pip install resoto-client
 ```
 
 ## Usage
