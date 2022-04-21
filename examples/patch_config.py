@@ -8,6 +8,7 @@ import os
 psk = os.environ.get("PSK", "changeme")
 client = ResotoClient(url="https://localhost:8900", psk=psk)
 
+
 def wait_for_resotocore(client: ResotoClient):
     while True:
         try:

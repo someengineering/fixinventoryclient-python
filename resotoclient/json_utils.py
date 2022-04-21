@@ -27,4 +27,4 @@ def json_dump(
     obj: object,
     cls: Optional[type] = None,
 ) -> JsValue:
-    return jsons.dump(obj, cls) # type: ignore
+    return jsons.dump(obj, cls)  # type: ignore
