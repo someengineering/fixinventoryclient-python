@@ -126,7 +126,7 @@ class ResotoClient:
         return response.text
 
     def create_node(
-        self, graph: str, parent_node_id: str, node_id: str, node: JsObject
+        self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto"
     ) -> JsObject:
         response = self._post(
             f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
@@ -138,7 +138,11 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def patch_node(
-        self, graph: str, node_id: str, node: JsObject, section: Optional[str] = None
+        self,
+        node_id: str,
+        node: JsObject,
+        graph: str = "resoto",
+        section: Optional[str] = None,
     ) -> JsObject:
         section_path = f"/section/{section}" if section else ""
         response = self._patch(
@@ -150,21 +154,23 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def get_node(self, graph: str, node_id: str) -> JsObject:
+    def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
         response = self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
-    def delete_node(self, graph: str, node_id: str) -> None:
+    def delete_node(self, node_id: str, graph: str = "resoto") -> None:
         response = self._delete(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 204:
             return None
         else:
             raise AttributeError(response.text)
 
-    def patch_nodes(self, graph: str, nodes: Sequence[JsObject]) -> List[JsObject]:
+    def patch_nodes(
+        self, nodes: Sequence[JsObject], graph: str = "resoto"
+    ) -> List[JsObject]:
         response = self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
@@ -174,7 +180,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def merge_graph(self, graph: str, update: List[JsObject]) -> GraphUpdate:
+    def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
         response = self._post(
             f"/graph/{graph}/merge",
             json=update,
@@ -185,7 +191,10 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def add_to_batch(
-        self, graph: str, update: List[JsObject], batch_id: Optional[str] = None
+        self,
+        update: List[JsObject],
+        graph: str = "resoto",
+        batch_id: Optional[str] = None,
     ) -> Tuple[str, GraphUpdate]:
         props = {"batch_id": batch_id} if batch_id else None
         response = self._post(
@@ -198,7 +207,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def list_batches(self, graph: str) -> List[JsObject]:
+    def list_batches(self, graph: str = "resoto") -> List[JsObject]:
         response = self._get(
             f"/graph/{graph}/batch",
         )
@@ -207,7 +216,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def commit_batch(self, graph: str, batch_id: str) -> None:
+    def commit_batch(self, batch_id: str, graph: str = "resoto") -> None:
         response = self._post(
             f"/graph/{graph}/batch/{batch_id}",
         )
@@ -216,7 +225,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def abort_batch(self, graph: str, batch_id: str) -> None:
+    def abort_batch(self, batch_id: str, graph: str = "resoto") -> None:
         response = self._delete(
             f"/graph/{graph}/batch/{batch_id}",
         )
@@ -225,7 +234,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_graph_raw(self, graph: str, search: str) -> JsObject:
+    def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
         response = self._post(
             f"/graph/{graph}/search/raw",
             data=search,
@@ -235,7 +244,9 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_graph_explain(self, graph: str, search: str) -> EstimatedSearchCost:
+    def search_graph_explain(
+        self, search: str, graph: str = "resoto"
+    ) -> EstimatedSearchCost:
         response = self._post(
             f"/graph/{graph}/search/explain",
             data=search,
@@ -245,21 +256,23 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_list(self, graph: str, search: str) -> Iterator[JsObject]:
+    def search_list(self, search: str, graph: str = "resoto") -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/list", data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_graph(self, graph: str, search: str) -> Iterator[JsObject]:
+    def search_graph(self, search: str, graph: str = "resoto") -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/graph", data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_aggregate(self, graph: str, search: str) -> Iterator[JsObject]:
+    def search_aggregate(
+        self, search: str, graph: str = "resoto"
+    ) -> Iterator[JsObject]:
         response = self._post(
             f"/graph/{graph}/search/aggregate", data=search, stream=True
         )
@@ -338,7 +351,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def cli_evaluate(
-        self, graph: str, command: str, **env: str
+        self, command: str, graph: str = "resoto", **env: str
     ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
         props = {"graph": graph, "section": "reported", **env}
         response = self._post(
@@ -359,7 +372,9 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def cli_execute(self, graph: str, command: str, **env: str) -> Iterator[JsValue]:
+    def cli_execute(
+        self, command: str, graph: str = "resoto", **env: str
+    ) -> Iterator[JsValue]:
         props = {"graph": graph, "section": "reported", **env}
 
         response = self._post(

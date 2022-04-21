@@ -4,7 +4,13 @@ from datetime import timedelta
 from enum import Enum
 
 JsValue = Union[
-    Mapping[str, "JsValue"], Sequence["JsValue"],  int, float, bool, str, None, 
+    Mapping[str, "JsValue"],
+    Sequence["JsValue"],
+    int,
+    float,
+    bool,
+    str,
+    None,
 ]
 
 JsObject = Mapping[str, JsValue]
@@ -78,6 +84,7 @@ class ParsedCommand:
 class ParsedCommands:
     commands: List[ParsedCommand]
     env: JsObject = field(default_factory=dict)
+
 
 @dataclass
 class ConfigValidation:
