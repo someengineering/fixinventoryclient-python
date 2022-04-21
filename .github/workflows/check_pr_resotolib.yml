@@ -36,11 +36,5 @@ jobs:
           pip install poetry nox nox-poetry
 
       - name: Run nox
-        working-directory: ./resotoclient
+        working-directory: .
         run: nox
-
-      - name: Archive code coverage results
-        uses: actions/upload-artifact@v2
-        with:
-          name: resotoclient-code-coverage-report
-          path: resotoclient/htmlcov/
