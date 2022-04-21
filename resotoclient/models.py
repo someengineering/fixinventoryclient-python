@@ -4,7 +4,7 @@ from datetime import timedelta
 from enum import Enum
 
 JsValue = Union[
-    str, int, float, bool, None, Mapping[str, "JsValue"], Sequence["JsValue"]
+    Mapping[str, "JsValue"], Sequence["JsValue"],  int, float, bool, str, None, 
 ]
 
 JsObject = Mapping[str, JsValue]
@@ -26,7 +26,7 @@ class Model:
 @dataclass
 class GraphUpdate:
     nodes_created: int
-    nodes_updates: int
+    nodes_updated: int
     nodes_deleted: int
     edges_created: int
     edges_updated: int
@@ -79,7 +79,7 @@ class ParsedCommands:
     commands: List[ParsedCommand]
     env: JsObject = field(default_factory=dict)
 
-
+@dataclass
 class ConfigValidation:
     id: str
     external_validation: bool = False
