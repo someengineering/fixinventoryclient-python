@@ -175,7 +175,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def merge_graph(self, graph: str, update: List[JsObject]) -> GraphUpdate:
-        response = self._patch(
+        response = self._post(
             f"/graph/{graph}/merge",
             json=update,
         )
@@ -248,14 +248,14 @@ class ResotoClient:
     def search_list(self, graph: str, search: str) -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/list", data=search, stream=True)
         if response.status_code == 200:
-            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
+            return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
     def search_graph(self, graph: str, search: str) -> Iterator[JsObject]:
         response = self._post(f"/graph/{graph}/search/graph", data=search, stream=True)
         if response.status_code == 200:
-            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
+            return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -264,7 +264,7 @@ class ResotoClient:
             f"/graph/{graph}/search/aggregate", data=search, stream=True
         )
         if response.status_code == 200:
-            return map(lambda line: json_loadb(line, JsObject), response.iter_lines())
+            return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -370,7 +370,7 @@ class ResotoClient:
             stream=True,
         )
         if response.status_code == 200:
-            return map(lambda l: json_loadb(l, Any), response.iter_lines())
+            return map(lambda l: json_loadb(l), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -384,7 +384,7 @@ class ResotoClient:
     def configs(self) -> Iterator[str]:
         response = self._get(f"/configs", stream=True)
         if response.status_code == 200:
-            return map(lambda l: json_loadb(l, Any), response.iter_lines())
+            return map(lambda l: json_loadb(l), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
@@ -453,7 +453,7 @@ class ResotoClient:
             "/configs/validation",
             stream=True,
         )
-        return map(lambda l: json_loadb(l, Any), response.iter_lines())
+        return map(lambda l: json_loadb(l), response.iter_lines())
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
         response = self._get(
