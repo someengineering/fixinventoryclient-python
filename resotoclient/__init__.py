@@ -141,8 +141,8 @@ class ResotoClient:
         self,
         node_id: str,
         node: JsObject,
-        graph: str = "resoto",
         section: Optional[str] = None,
+        graph: str = "resoto",
     ) -> JsObject:
         section_path = f"/section/{section}" if section else ""
         response = self._patch(
@@ -193,8 +193,8 @@ class ResotoClient:
     def add_to_batch(
         self,
         update: List[JsObject],
-        graph: str = "resoto",
         batch_id: Optional[str] = None,
+        graph: str = "resoto",
     ) -> Tuple[str, GraphUpdate]:
         props = {"batch_id": batch_id} if batch_id else None
         response = self._post(
