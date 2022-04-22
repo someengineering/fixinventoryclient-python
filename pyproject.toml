@@ -1,12 +1,12 @@
 [tool.poetry]
 name = "resotoclient"
-version = "0.1.1"
+version = "0.1.3"
 description = "Resoto Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/someengineering/resoto-client-python"
-repository = "https://github.com/someengineering/resoto-client-python"
+homepage = "https://github.com/someengineering/resotoclient-python"
+repository = "https://github.com/someengineering/resotoclient-python"
 packages = [
     { include = "resotoclient" },
 ]
@@ -31,7 +31,7 @@ classifiers = [
 ]
 
 [tool.poetry.urls]
-Changelog = "https://github.com/someengineering/resoto-client-python/releases"
+Changelog = "https://github.com/someengineering/resotoclient-python/releases"
 
 [tool.poetry.dependencies]
 python = "^3.7"
