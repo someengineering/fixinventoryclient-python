@@ -29,7 +29,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from requests_toolbelt import MultipartDecoder, MultipartEncoder
+from requests_toolbelt import MultipartDecoder, MultipartEncoder  # type: ignore
 import random
 import string
 
@@ -547,7 +547,7 @@ class ResotoClient:
                 def decode(value: Union[str, bytes]) -> str:
                     return value.decode("utf-8") if isinstance(value, bytes) else value
 
-                for part in decoder.parts:
+                for part in decoder.parts:  # type: ignore
                     part.headers = {  # type: ignore
                         decode(k): decode(v) for k, v in part.headers.items()  # type: ignore
                     }
