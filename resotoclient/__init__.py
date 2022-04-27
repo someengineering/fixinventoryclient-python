@@ -1,7 +1,16 @@
 import requests
 from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
-from typing import Any, Dict, Iterator, Set, Optional, List, Tuple, Sequence
+from typing import (
+    Any,
+    Dict,
+    Iterator,
+    Set,
+    Optional,
+    List,
+    Tuple,
+    Sequence,
+)
 from resotoclient.json_utils import json_load, json_loadb, json_dump
 from resotoclient import ca
 from resotoclient.models import (
@@ -17,6 +26,12 @@ from resotoclient.models import (
     Model,
     Kind,
 )
+from requests_toolbelt import MultipartDecoder, MultipartEncoder  # type: ignore
+import random
+import string
+
+
+FilenameLookup = Dict[str, str]
 
 
 class ResotoClient:
@@ -30,6 +45,7 @@ class ResotoClient:
         self.ca_cert_path = None
         if url.startswith("https"):
             self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
+        self.session_id = rnd_str()
 
     def _headers(self) -> Dict[str, str]:
 
@@ -44,6 +60,9 @@ class ResotoClient:
         if self.ca_cert_path:
             session.verify = self.ca_cert_path
         session.headers = CaseInsensitiveDict(self._headers())
+        params: Dict[str, str] = {}
+        params["session_id"] = self.session_id
+        session.params = params
 
     def _get(
         self,
@@ -71,11 +90,18 @@ class ResotoClient:
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            s.headers.update(headers or {})
             if stream:
                 s.stream = True
-                s.headers.update({"Accept": "application/x-ndjson"})
-            return s.post(self.base_url + path, data=data, json=json, params=params)
+                s.headers.update({"Accept": "application/ndjson"})
+            if headers:
+                headers.update(headers)
+            return s.post(
+                self.base_url + path,
+                data=data,
+                json=json,
+                params=params,
+                headers=headers,
+            )
 
     def _put(
         self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
@@ -372,20 +398,80 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def cli_execute(
-        self, command: str, graph: str = "resoto", **env: str
-    ) -> Iterator[JsValue]:
-        props = {"graph": graph, "section": "reported", **env}
+    def cli_execute_raw(
+        self,
+        command: str,
+        graph: Optional[str] = "resoto",
+        section: Optional[str] = "reported",
+        headers: Optional[Dict[str, str]] = None,
+        files: Optional[FilenameLookup] = None,
+        **env: str,
+    ) -> requests.Response:
+        props: Dict[str, str] = {}
+        if graph:
+            props["graph"] = graph
+        if section:
+            props["section"] = section
+
+        body: Optional[Any] = None
+        headers = headers or {}
+        if not files:
+            headers["Content-Type"] = "text/plain"
+            body = command
+        else:
+            headers["Resoto-Shell-Command"] = command
+            headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
+            parts = {
+                name: (name, open(path, "rb"), "application/octet-stream")
+                for name, path in files.items()
+            }
+            body = MultipartEncoder(parts, "file-upload")
 
         response = self._post(
             f"/cli/execute",
-            data=command,
+            data=body,
             params=props,
-            headers={"Content-Type": "text/plain"},
+            headers=headers,
             stream=True,
         )
+        return response
+
+    def cli_execute(
+        self,
+        command: str,
+        graph: Optional[str] = "resoto",
+        section: Optional[str] = "reported",
+        headers: Optional[Dict[str, str]] = None,
+        files: Optional[FilenameLookup] = None,
+        **env: str,
+    ) -> Iterator[JsValue]:
+        """
+        Execute a CLI command and return the result as a stream of text or JSON objects.
+
+        Binary or multi-part responses will trigger an exception.
+        """
+
+        response = self.cli_execute_raw(
+            command=command,
+            graph=graph,
+            section=section,
+            headers=headers,
+            files=files,
+            **env,
+        )
+
         if response.status_code == 200:
-            return map(lambda l: json_loadb(l), response.iter_lines())
+            content_type = response.headers.get("Content-Type")
+            if content_type == "text/plain":
+                return iter([response.text])
+            elif content_type == "application/json":
+                return iter([response.json()])
+            elif content_type == "application/x-ndjson":
+                return map(lambda line: json_loadb(line), response.iter_lines())
+            else:
+                raise NotImplementedError(
+                    f"Unsupported content type: {content_type}. Use cli_execute_raw instead."
+                )
         else:
             raise AttributeError(response.text)
 
@@ -496,3 +582,9 @@ class ResotoClient:
             return response.text
         else:
             raise AttributeError(response.text)
+
+
+def rnd_str(str_len: int = 10) -> str:
+    return "".join(
+        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
+    )
