@@ -1,10 +1,8 @@
 import requests
 from requests.structures import CaseInsensitiveDict
-from requests import Response
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import (
     Any,
-    Callable,
     Dict,
     Iterator,
     Set,
@@ -12,7 +10,6 @@ from typing import (
     List,
     Tuple,
     Sequence,
-    Union,
 )
 from resotoclient.json_utils import json_load, json_loadb, json_dump
 from resotoclient import ca
@@ -34,9 +31,7 @@ import random
 import string
 
 
-Files = Dict[str, str]
-Command = str
-ContentType = str
+FilenameLookup = Dict[str, str]
 
 
 class ResotoClient:
@@ -97,7 +92,7 @@ class ResotoClient:
             self._prepare_session(s)
             if stream:
                 s.stream = True
-                s.headers.update({"Accept": "application/x-ndjson"})
+                s.headers.update({"Accept": "application/ndjson"})
             if headers:
                 headers.update(headers)
             return s.post(
@@ -409,7 +404,7 @@ class ResotoClient:
         graph: Optional[str] = "resoto",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
-        files: Optional[Files] = None,
+        files: Optional[FilenameLookup] = None,
         **env: str,
     ) -> requests.Response:
         props: Dict[str, str] = {}
@@ -447,7 +442,7 @@ class ResotoClient:
         graph: Optional[str] = "resoto",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
-        files: Optional[Files] = None,
+        files: Optional[FilenameLookup] = None,
         **env: str,
     ) -> Iterator[JsValue]:
         """
@@ -475,95 +470,8 @@ class ResotoClient:
                 return map(lambda line: json_loadb(line), response.iter_lines())
             else:
                 raise NotImplementedError(
-                    f"Unsupported content type: {content_type}. Use cli_execute_raw or cli_execute_with_callback instead."
+                    f"Unsupported content type: {content_type}. Use cli_execute_raw instead."
                 )
-        else:
-            raise AttributeError(response.text)
-
-    def cli_execute_bytes(
-        self,
-        command: str,
-        graph: Optional[str] = "resoto",
-        section: Optional[str] = "reported",
-        headers: Optional[Dict[str, str]] = None,
-        files: Optional[Files] = None,
-        **env: str,
-    ) -> Iterator[bytes]:
-        """
-        Execute a CLI command and return the result as a stream of binary data.
-
-        Text or multi-part responses will trigger an exception.
-        """
-
-        response = self.cli_execute_raw(
-            command=command,
-            graph=graph,
-            section=section,
-            headers=headers,
-            files=files,
-            **env,
-        )
-
-        if response.status_code == 200:
-            content_type = response.headers.get("Content-Type")
-            if content_type == "application/octet-stream":
-                return response.iter_content(chunk_size=8192)
-            else:
-                raise NotImplementedError(
-                    f"Unsupported content type: {content_type}. Use other cli_execute_raw or cli_execute_with_callback function instead."
-                )
-        else:
-            raise AttributeError(response.text)
-
-    def cli_execute_with_callback(
-        self,
-        command: Command,
-        result_handler: Dict[ContentType, Callable[[Response], None]],
-        graph: Optional[str] = "resoto",
-        section: Optional[str] = "reported",
-        headers: Optional[Dict[str, str]] = None,
-        files: Optional[Files] = None,
-        **env: str,
-    ) -> None:
-        """
-        Execute a CLI command and call a result handler for each supported content type.
-        """
-        response = self.cli_execute_raw(
-            command=command,
-            graph=graph,
-            section=section,
-            headers=headers,
-            files=files,
-            **env,
-        )
-
-        def process_response(response: Response) -> None:
-            content_type = response.headers.get("Content-Type") or ""
-
-            if content_type.startswith("multipart"):
-                # Received a multipart response: parse the parts
-                decoder = MultipartDecoder.from_response(response)  # type: ignore
-
-                def decode(value: Union[str, bytes]) -> str:
-                    return value.decode("utf-8") if isinstance(value, bytes) else value
-
-                for part in decoder.parts:  # type: ignore
-                    part.headers = {  # type: ignore
-                        decode(k): decode(v) for k, v in part.headers.items()  # type: ignore
-                    }
-                    process_response(part)  # type: ignore
-            else:
-                content_type = response.headers.get("Content-Type") or ""
-                handler = result_handler.get(content_type)
-                if handler:
-                    handler(response)
-                else:
-                    raise RuntimeError(
-                        f"No handler provided for content type: {content_type}"
-                    )
-
-        if response.status_code == 200:
-            process_response(response)
         else:
             raise AttributeError(response.text)
 
