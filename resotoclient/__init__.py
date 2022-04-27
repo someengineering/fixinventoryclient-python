@@ -39,13 +39,22 @@ class ResotoClient:
     The ApiClient interacts with a running core instance via the REST interface.
     """
 
-    def __init__(self, url: str, psk: Optional[str]):
+    def __init__(
+        self,
+        url: str,
+        psk: Optional[str],
+        custom_ca_cert_path: Optional[str] = None,
+        verify: bool = True,
+    ):
         self.base_url = url
         self.psk = psk
         self.ca_cert_path = None
-        if url.startswith("https"):
+        if custom_ca_cert_path:
+            self.ca_cert_path = custom_ca_cert_path
+        elif url.startswith("https"):
             self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
         self.session_id = rnd_str()
+        self.verify = verify
 
     def _headers(self) -> Dict[str, str]:
 
@@ -57,8 +66,10 @@ class ResotoClient:
         return headers
 
     def _prepare_session(self, session: requests.Session) -> None:
-        if self.ca_cert_path:
+        if self.ca_cert_path and self.verify:
             session.verify = self.ca_cert_path
+        else:
+            session.verify = False
         session.headers = CaseInsensitiveDict(self._headers())
         params: Dict[str, str] = {}
         params["session_id"] = self.session_id
