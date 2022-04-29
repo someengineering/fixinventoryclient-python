@@ -293,15 +293,22 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_list(self, search: str, graph: str = "resoto") -> Iterator[JsObject]:
-        response = self._post(f"/graph/{graph}/search/list", data=search, stream=True)
+    def search_list(self, search: str, section: Optional[str] = None, graph: str = "resoto") -> Iterator[JsObject]:
+        params = {}
+        if section:
+            params["section"] = section
+        
+        response = self._post(f"/graph/{graph}/search/list", params=params, data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_graph(self, search: str, graph: str = "resoto") -> Iterator[JsObject]:
-        response = self._post(f"/graph/{graph}/search/graph", data=search, stream=True)
+    def search_graph(self, search: str, section: Optional[str] = None, graph: str = "resoto") -> Iterator[JsObject]:
+        params = {}
+        if section:
+            params["section"] = section
+        response = self._post(f"/graph/{graph}/search/graph", params=params, data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
