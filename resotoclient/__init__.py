@@ -103,6 +103,7 @@ class ResotoClient:
                 self.__ca_cert = ca.load_cert_from_core(
                     self.__ca_cert_path, self.resotocore_url, self.psk, log
                 )
+            self.__loaded.set()
 
     def reload(self) -> None:
         self.__loaded.clear()
