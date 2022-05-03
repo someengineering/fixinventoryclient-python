@@ -33,7 +33,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from requests_toolbelt import MultipartEncoder
+from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import datetime, timedelta
