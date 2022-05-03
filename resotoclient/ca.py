@@ -7,15 +7,23 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
 from resotoclient.jwt_utils import decode_jwt_from_headers
+from jwt.exceptions import InvalidSignatureError
 import logging
+from logging import Logger
 import certifi
 import os
 from typing import Optional
 import tempfile
+import time
 
 
 def load_cert_from_bytes(cert: bytes) -> Certificate:
     return x509.load_pem_x509_certificate(cert, default_backend())
+
+
+def load_cert_from_file(cert_path: str) -> Certificate:
+    with open(cert_path, "rb") as f:
+        return load_cert_from_bytes(f.read())
 
 
 def cert_fingerprint(cert: Certificate, hash_algorithm: str = "SHA256") -> str:
@@ -31,14 +39,13 @@ def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
         r = requests.get(f"{resotocore_uri}/ca/cert", verify=False)
         ca_cert = load_cert_from_bytes(r.content)
         if psk:
-            # noinspection PyTypeChecker
             jwt = decode_jwt_from_headers(dict(r.headers), psk)
             if jwt is None:
-                raise ValueError(
+                raise NoJWTError(
                     "Failed to decode JWT - was resotocore started without PSK?"
                 )
             if jwt["sha256_fingerprint"] != cert_fingerprint(ca_cert):
-                raise ValueError("Invalid Root CA certificate fingerprint")
+                raise FingerprintError("Invalid Root CA certificate fingerprint")
         return ca_cert
 
 
@@ -78,3 +85,46 @@ def load_ca_cert(resotocore_uri: str, psk: Optional[str]) -> str:
     logging.debug(f"Writing CA cert {filename}")
     write_ca_bundle(ca_cert, filename, include_certifi=True)
     return filename
+
+
+def load_cert_from_core(
+    ca_cert_path: str, resotocore_uri: str, psk: Optional[str], log: Logger
+) -> Certificate:
+    log.debug("Loading CA certificate from core")
+    try:
+        ca_cert = get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
+    except FingerprintError as e:
+        log.fatal(f"{e}, MITM attack?")
+        raise
+    except InvalidSignatureError as e:
+        log.fatal(f"{e}, wrong PSK?")
+        raise
+    except NoJWTError as e:
+        log.fatal(f"{e}, resotocore started without PSK?")
+        raise
+    except Exception as e:
+        log.fatal(f"{e}")
+        raise
+    log.debug(f"Writing CA cert {ca_cert_path}")
+    write_ca_bundle(ca_cert, ca_cert_path, include_certifi=True)
+    return ca_cert
+
+
+def refresh_cert_on_disk(
+    ca_cert_path: str, ca_cert: Certificate, log: Logger, refresh_every_sec: int = 10800
+) -> None:
+    try:
+        last_ca_cert_update = time.time() - os.path.getmtime(ca_cert_path)
+        if last_ca_cert_update > refresh_every_sec:
+            log.debug("Refreshing cert/key files on disk")
+            write_ca_bundle(ca_cert, ca_cert_path, include_certifi=True)
+    except FileNotFoundError:
+        pass
+
+
+class FingerprintError(Exception):
+    pass
+
+
+class NoJWTError(Exception):
+    pass

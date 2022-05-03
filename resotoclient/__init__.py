@@ -1,3 +1,8 @@
+import logging
+from multiprocessing import Condition, Event
+from tempfile import TemporaryDirectory
+from cryptography.x509.base import Certificate
+from threading import Lock, Thread
 import requests
 from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
@@ -10,7 +15,9 @@ from typing import (
     List,
     Tuple,
     Sequence,
+    Type,
 )
+from types import TracebackType
 from resotoclient.json_utils import json_load, json_loadb, json_dump
 from resotoclient import ca
 from resotoclient.models import (
@@ -26,12 +33,15 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from requests_toolbelt import MultipartDecoder, MultipartEncoder  # type: ignore
+from requests_toolbelt import MultipartEncoder
 import random
 import string
-
+from datetime import datetime, timedelta
+import os
 
 FilenameLookup = Dict[str, str]
+
+log = logging.getLogger("resotoclient")
 
 
 class ResotoClient:
@@ -45,16 +55,81 @@ class ResotoClient:
         psk: Optional[str],
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
+        renew_before: timedelta = timedelta(days=1),
     ):
-        self.base_url = url
+        self.resotocore_url = url
         self.psk = psk
-        self.ca_cert_path = None
-        if custom_ca_cert_path:
-            self.ca_cert_path = custom_ca_cert_path
-        elif url.startswith("https"):
-            self.ca_cert_path = ca.load_ca_cert(resotocore_uri=url, psk=psk)
-        self.session_id = rnd_str()
+        self.custom_ca_cert_path = custom_ca_cert_path
         self.verify = verify
+        self.__ca_cert = None
+        self.__tempdir = TemporaryDirectory(prefix="resoto-cert-")
+        self.__ca_cert_path = f"{self.__tempdir.name}/ca.crt"
+        self.session_id = rnd_str()
+        self.renew_before = renew_before
+        self.__watcher = Thread(
+            target=self.__certificates_watcher, name="certificates_watcher"
+        )
+        self.__load_lock = Lock()
+        self.__loaded = Event()
+        self.__exit = Condition()
+
+    def __enter__(self) -> "ResotoClient":
+        self.start()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.shutdown()
+
+    def start(self) -> None:
+        self.load()
+        if not self.__watcher.is_alive():
+            self.__watcher.start()
+
+    def shutdown(self) -> None:
+        with self.__exit:
+            self.__exit.notify()
+
+    def load(self) -> None:
+        with self.__load_lock:
+            if self.custom_ca_cert_path is not None:
+                log.debug(f"Loading CA certificate from {self.custom_ca_cert_path}")
+                self.__ca_cert = ca.load_cert_from_file(self.custom_ca_cert_path)
+            else:
+                self.__ca_cert = ca.load_cert_from_core(
+                    self.__ca_cert_path, self.resotocore_url, self.psk, log
+                )
+
+    def reload(self) -> None:
+        self.__loaded.clear()
+        self.load()
+
+    def __certificates_watcher(self) -> None:
+        while True:
+            with self.__exit:
+                if self.__loaded.is_set():
+                    cert = self.__ca_cert
+                    if (
+                        isinstance(cert, Certificate)
+                        and cert.not_valid_after < datetime.utcnow() - self.renew_before
+                    ):
+                        self.reload()
+                    self.__refresh_files_on_disk()
+                if self.__exit.wait(60):
+                    break
+
+    def __refresh_files_on_disk(self) -> None:
+        if not self.__loaded.is_set():
+            return
+        if self.__ca_cert is None:
+            return
+        ca.refresh_cert_on_disk(
+            ca_cert_path=self.__ca_cert_path, ca_cert=self.__ca_cert, log=log
+        )
 
     def _headers(self) -> Dict[str, str]:
 
@@ -66,8 +141,10 @@ class ResotoClient:
         return headers
 
     def _prepare_session(self, session: requests.Session) -> None:
-        if self.ca_cert_path and self.verify:
-            session.verify = self.ca_cert_path
+        if self.verify:
+            if not os.path.isfile(self.__ca_cert_path):
+                self.load()
+            session.verify = self.__ca_cert_path
         else:
             session.verify = False
         session.headers = CaseInsensitiveDict(self._headers())
@@ -88,7 +165,7 @@ class ResotoClient:
             if stream:
                 s.stream = True
                 s.headers.update({"Accept": "application/x-ndjson"})
-            return s.get(self.base_url + path, params=params)
+            return s.get(self.resotocore_url + path, params=params)
 
     def _post(
         self,
@@ -107,7 +184,7 @@ class ResotoClient:
             if headers:
                 headers.update(headers)
             return s.post(
-                self.base_url + path,
+                self.resotocore_url + path,
                 data=data,
                 json=json,
                 params=params,
@@ -119,19 +196,19 @@ class ResotoClient:
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            return s.put(self.base_url + path, json=json, params=params)
+            return s.put(self.resotocore_url + path, json=json, params=params)
 
     def _patch(self, path: str, json: JsValue) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            return s.patch(self.base_url + path, json=json)
+            return s.patch(self.resotocore_url + path, json=json)
 
     def _delete(
         self, path: str, params: Optional[Dict[str, str]] = None
     ) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
-            return s.delete(self.base_url + path, params=params)
+            return s.delete(self.resotocore_url + path, params=params)
 
     def model(self) -> Model:
         response = self._get("/model")
@@ -144,7 +221,7 @@ class ResotoClient:
         return model
 
     def list_graphs(self) -> Set[str]:
-        response = self._get(f"/graph")
+        response = self._get("/graph")
         return set(response.json())
 
     def get_graph(self, name: str) -> Optional[JsObject]:
@@ -293,22 +370,30 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_list(self, search: str, section: Optional[str] = None, graph: str = "resoto") -> Iterator[JsObject]:
+    def search_list(
+        self, search: str, section: Optional[str] = None, graph: str = "resoto"
+    ) -> Iterator[JsObject]:
         params = {}
         if section:
             params["section"] = section
-        
-        response = self._post(f"/graph/{graph}/search/list", params=params, data=search, stream=True)
+
+        response = self._post(
+            f"/graph/{graph}/search/list", params=params, data=search, stream=True
+        )
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
             raise AttributeError(response.text)
 
-    def search_graph(self, search: str, section: Optional[str] = None, graph: str = "resoto") -> Iterator[JsObject]:
+    def search_graph(
+        self, search: str, section: Optional[str] = None, graph: str = "resoto"
+    ) -> Iterator[JsObject]:
         params = {}
         if section:
             params["section"] = section
-        response = self._post(f"/graph/{graph}/search/graph", params=params, data=search, stream=True)
+        response = self._post(
+            f"/graph/{graph}/search/graph", params=params, data=search, stream=True
+        )
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
@@ -326,7 +411,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def subscribers(self) -> List[Subscriber]:
-        response = self._get(f"/subscribers")
+        response = self._get("/subscribers")
         if response.status_code == 200:
             return json_load(response.json(), List[Subscriber])
         else:
@@ -399,7 +484,7 @@ class ResotoClient:
     ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
         props = {"graph": graph, "section": "reported", **env}
         response = self._post(
-            f"/cli/evaluate",
+            "/cli/evaluate",
             data=command,
             params=props,
         )
@@ -446,7 +531,7 @@ class ResotoClient:
             body = MultipartEncoder(parts, "file-upload")
 
         response = self._post(
-            f"/cli/execute",
+            "/cli/execute",
             data=body,
             params=props,
             headers=headers,
@@ -494,14 +579,14 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def cli_info(self) -> JsObject:
-        response = self._get(f"/cli/info")
+        response = self._get("/cli/info")
         if response.status_code == 200:
             return response.json()
         else:
             raise AttributeError(response.text)
 
     def configs(self) -> Iterator[str]:
-        response = self._get(f"/configs", stream=True)
+        response = self._get("/configs", stream=True)
         if response.status_code == 200:
             return map(lambda l: json_loadb(l), response.iter_lines())
         else:
@@ -550,7 +635,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def get_configs_model(self) -> Model:
-        response = self._get(f"/configs/model")
+        response = self._get("/configs/model")
         if response.status_code == 200:
             model_json = response.json()
             model = json_load(model_json, Model)
@@ -588,14 +673,14 @@ class ResotoClient:
         return json_load(response.json(), ConfigValidation)
 
     def ping(self) -> str:
-        response = self._get(f"/system/ping")
+        response = self._get("/system/ping")
         if response.status_code == 200:
             return response.text
         else:
             raise AttributeError(response.text)
 
     def ready(self) -> str:
-        response = self._get(f"/system/ready", headers={"Accept": "text/plain"})
+        response = self._get("/system/ready", headers={"Accept": "text/plain"})
         if response.status_code == 200:
             return response.text
         else:
