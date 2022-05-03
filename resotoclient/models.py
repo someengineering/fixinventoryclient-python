@@ -17,10 +17,18 @@ JsObject = Mapping[str, JsValue]
 
 
 @dataclass
+class Property:
+    name: str
+    kind: str
+    required: bool = False
+    description: Optional[str] = None
+
+
+@dataclass
 class Kind:
     fqn: str
     runtime_kind: Optional[str]
-    properties: Optional[List[JsObject]]
+    properties: Optional[List[Property]]
     bases: Optional[List[str]]
 
 
