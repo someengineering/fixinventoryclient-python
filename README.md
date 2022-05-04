@@ -20,3 +20,9 @@ for instance in instances_csv:
 ```
 
 For more examples see the examples directory.
+
+## Publish
+
+- bump the version number in pyproject.toml
+- `poetry build`
+- `poetry publish`
