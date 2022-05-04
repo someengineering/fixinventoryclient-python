@@ -1,8 +1,4 @@
 import logging
-from multiprocessing import Condition, Event
-from tempfile import TemporaryDirectory
-from cryptography.x509.base import Certificate
-from threading import Lock, Thread
 import requests
 from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
@@ -19,7 +15,7 @@ from typing import (
 )
 from types import TracebackType
 from resotoclient.json_utils import json_load, json_loadb, json_dump
-from resotoclient import ca
+from resotoclient.ca import CertificatesHolder
 from resotoclient.models import (
     Subscriber,
     Subscription,
@@ -36,8 +32,7 @@ from resotoclient.models import (
 from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
-from datetime import datetime, timedelta
-import os
+from datetime import timedelta
 
 FilenameLookup = Dict[str, str]
 
@@ -59,19 +54,14 @@ class ResotoClient:
     ):
         self.resotocore_url = url
         self.psk = psk
-        self.custom_ca_cert_path = custom_ca_cert_path
         self.verify = verify
-        self.__ca_cert = None
-        self.__tempdir = TemporaryDirectory(prefix="resoto-cert-")
-        self.__ca_cert_path = f"{self.__tempdir.name}/ca.crt"
         self.session_id = rnd_str()
-        self.renew_before = renew_before
-        self.__watcher = Thread(
-            target=self.__certificates_watcher, name="certificates_watcher"
+        self.holder = CertificatesHolder(
+            resotocore_url=url,
+            psk=psk,
+            custom_ca_cert_path=custom_ca_cert_path,
+            renew_before=renew_before,
         )
-        self.__load_lock = Lock()
-        self.__loaded = Event()
-        self.__exit = Condition()
 
     def __enter__(self) -> "ResotoClient":
         self.start()
@@ -85,52 +75,11 @@ class ResotoClient:
     ) -> None:
         self.shutdown()
 
-    def start(self) -> None:
-        self.load()
-        if not self.__watcher.is_alive():
-            self.__watcher.start()
+    def start(self):
+        self.holder.start()
 
-    def shutdown(self) -> None:
-        with self.__exit:
-            self.__exit.notify()
-
-    def load(self) -> None:
-        with self.__load_lock:
-            if self.custom_ca_cert_path is not None:
-                log.debug(f"Loading CA certificate from {self.custom_ca_cert_path}")
-                self.__ca_cert = ca.load_cert_from_file(self.custom_ca_cert_path)
-            else:
-                self.__ca_cert = ca.load_cert_from_core(
-                    self.__ca_cert_path, self.resotocore_url, self.psk, log
-                )
-            self.__loaded.set()
-
-    def reload(self) -> None:
-        self.__loaded.clear()
-        self.load()
-
-    def __certificates_watcher(self) -> None:
-        while True:
-            with self.__exit:
-                if self.__loaded.is_set():
-                    cert = self.__ca_cert
-                    if (
-                        isinstance(cert, Certificate)
-                        and cert.not_valid_after < datetime.utcnow() - self.renew_before
-                    ):
-                        self.reload()
-                    self.__refresh_files_on_disk()
-                if self.__exit.wait(60):
-                    break
-
-    def __refresh_files_on_disk(self) -> None:
-        if not self.__loaded.is_set():
-            return
-        if self.__ca_cert is None:
-            return
-        ca.refresh_cert_on_disk(
-            ca_cert_path=self.__ca_cert_path, ca_cert=self.__ca_cert, log=log
-        )
+    def shutdown(self):
+        self.holder.shutdown()
 
     def _headers(self) -> Dict[str, str]:
 
@@ -143,9 +92,7 @@ class ResotoClient:
 
     def _prepare_session(self, session: requests.Session) -> None:
         if self.verify:
-            if not os.path.isfile(self.__ca_cert_path):
-                self.load()
-            session.verify = self.__ca_cert_path
+            session.verify = self.holder.ca_cert_path()
         else:
             session.verify = False
         session.headers = CaseInsensitiveDict(self._headers())

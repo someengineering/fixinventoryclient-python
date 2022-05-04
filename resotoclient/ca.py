@@ -15,6 +15,9 @@ import os
 from typing import Optional
 import tempfile
 import time
+from datetime import timedelta, datetime
+from tempfile import TemporaryDirectory
+from threading import Lock, Thread, Condition, Event
 
 
 def load_cert_from_bytes(cert: bytes) -> Certificate:
@@ -128,3 +131,83 @@ class FingerprintError(Exception):
 
 class NoJWTError(Exception):
     pass
+
+
+class CertificatesHolder:
+    def __init__(
+        self,
+        resotocore_url: str,
+        psk: Optional[str],
+        custom_ca_cert_path: Optional[str],
+        renew_before: timedelta,
+    ) -> None:
+        self.resotocore_url = resotocore_url
+        self.psk = psk
+        self.__custom_ca_cert_path = custom_ca_cert_path
+        self.__ca_cert = None
+        self.__tempdir = TemporaryDirectory(prefix="resoto-cert-")
+        self.__ca_cert_path = f"{self.__tempdir.name}/ca.crt"
+        self.__renew_before = renew_before
+        self.__watcher = Thread(
+            target=self.__certificates_watcher, name="certificates_watcher"
+        )
+        self.__load_lock = Lock()
+        self.__loaded = Event()
+        self.__exit = Condition()
+
+        self.log = logging.getLogger("resotoclient")
+
+    def start(self) -> None:
+        self.load()
+        if not self.__watcher.is_alive():
+            self.__watcher.start()
+
+    def shutdown(self) -> None:
+        with self.__exit:
+            self.__exit.notify()
+
+    def load(self) -> None:
+        with self.__load_lock:
+            if self.__custom_ca_cert_path is not None:
+                self.log.debug(
+                    f"Loading CA certificate from {self.__custom_ca_cert_path}"
+                )
+                self.__ca_cert = load_cert_from_file(self.__custom_ca_cert_path)
+            else:
+                self.__ca_cert = load_cert_from_core(
+                    self.__ca_cert_path, self.resotocore_url, self.psk, self.log
+                )
+            self.__loaded.set()
+
+    def reload(self) -> None:
+        self.__loaded.clear()
+        self.load()
+
+    def ca_cert_path(self) -> str:
+        if not os.path.isfile(self.__ca_cert_path):
+            self.load()
+        return self.__ca_cert_path
+
+    def __certificates_watcher(self) -> None:
+        while True:
+            with self.__exit:
+                if self.__loaded.is_set():
+                    cert = self.__ca_cert
+                    if (
+                        isinstance(cert, Certificate)
+                        and cert.not_valid_after
+                        < datetime.utcnow() - self.__renew_before
+                    ):
+                        self.reload()
+                    self.__refresh_files_on_disk()
+                if self.__exit.wait(60):
+                    break
+
+    def __refresh_files_on_disk(self) -> None:
+        if not self.__loaded.is_set():
+            return
+        if self.__ca_cert is None:
+            return
+        refresh_cert_on_disk(
+            ca_cert_path=self.__ca_cert_path, ca_cert=self.__ca_cert, log=self.log
+        )
