@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "resotoclient"
-version = "0.1.7"
+version = "0.1.8"
 description = "Resoto Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
@@ -38,7 +38,7 @@ python = "^3.7"
 jsons="^1.6.1"
 requests="^2.27.1"
 PyJWT="^2.3.0"
-cryptography="^36.0.2"
+cryptography=">=36.0.2"
 requests-toolbelt = "^0.9.1"
 
 [tool.poetry.dev-dependencies]
