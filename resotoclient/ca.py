@@ -44,9 +44,7 @@ def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
         if psk:
             jwt = decode_jwt_from_headers(dict(r.headers), psk)
             if jwt is None:
-                raise NoJWTError(
-                    "Failed to decode JWT - was resotocore started without PSK?"
-                )
+                raise NoJWTError("Failed to decode JWT")
             if jwt["sha256_fingerprint"] != cert_fingerprint(ca_cert):
                 raise FingerprintError("Invalid Root CA certificate fingerprint")
         return ca_cert
