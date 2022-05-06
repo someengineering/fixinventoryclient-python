@@ -20,10 +20,7 @@ except ImportError:
 package = "resotoclient"
 python_version = "3.9"
 nox.needs_version = ">= 2021.6.6"
-nox.options.sessions = (
-    "safety",
-    "pyright",
-)
+nox.options.sessions = ("safety", "pyright", "pytest")
 
 
 @session(python=python_version)
@@ -41,3 +38,12 @@ def pyright(session: Session) -> None:
     session.install(".")
     session.install("pyright", "pytest")
     session.run("pyright", *args)
+
+
+@session(python=python_version)
+def pytest(session: Session) -> None:
+    """Test using pytest"""
+    args = session.posargs or ["tests"]
+    session.install(".")
+    session.install("pytest")
+    session.run("pytest", *args)

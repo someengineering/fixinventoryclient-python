@@ -36,7 +36,7 @@ from datetime import timedelta
 
 FilenameLookup = Dict[str, str]
 
-log = logging.getLogger("resotoclient")
+log: logging.Logger = logging.getLogger("resotoclient")
 
 
 class ResotoClient:
@@ -75,10 +75,10 @@ class ResotoClient:
     ) -> None:
         self.shutdown()
 
-    def start(self):
+    def start(self) -> None:
         self.holder.start()
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         self.holder.shutdown()
 
     def _headers(self) -> Dict[str, str]:

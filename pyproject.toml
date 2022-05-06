@@ -52,7 +52,7 @@ flake8-bugbear = "^21.9.2"
 pep8-naming = "^0.12.1"
 
 [tool.pyright]
-include = ["resotoclient"]
+include = ["resotoclient", "tests"]
 exclude = ["**/node_modules",
     "**/__pycache__"
 ]
@@ -68,6 +68,7 @@ executionEnvironments = [
   { root = "." }
 ]
 typeCheckingMode = "strict"
+useLibraryCodeForTypes = true
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]

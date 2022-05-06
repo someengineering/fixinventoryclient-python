@@ -13,14 +13,14 @@ def json_load(
     json_obj: object,
     cls: Optional[Type[T]] = None,
 ) -> T:
-    return jsons.load(json_obj, cls)
+    return jsons.load(json_obj, cls)  # type: ignore
 
 
 def json_loadb(
     json_obj: bytes,
     cls: Optional[Type[T]] = None,
 ) -> T:
-    return jsons.loadb(json_obj, cls)
+    return jsons.loadb(json_obj, cls)  # type: ignore
 
 
 def json_dump(
