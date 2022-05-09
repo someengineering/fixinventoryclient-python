@@ -1,25 +1,17 @@
 from contextlib import suppress
-from multiprocessing import Process
-from typing import Iterator, List
+from typing import List
 
 import pytest
 from _pytest.fixtures import fixture
-from arango.database import StandardDatabase  # type: ignore
 
-from resotocore.__main__ import run
-from resotocore.model.model import predefined_kinds, Kind
-from resotocore.model.typed_model import to_js
-from resotocore.util import rnd_str, AccessJson
 import requests
 import time
 
 # noinspection PyUnresolvedReferences
 from tests import (
     foo_kinds,  # type: ignore
-    system_db,  # type: ignore
-    local_client,  # type: ignore
-    test_db,  # type: ignore
     create_graph,
+    rnd_str,
 )
 from resotoclient import ResotoClient
 from resotoclient import models as rc
@@ -43,57 +35,36 @@ def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
 
 
 @fixture
-def core_client(
-    foo_kinds: List[Kind], test_db: StandardDatabase
-) -> Iterator[ResotoClient]:
+def core_client(foo_kinds: List[rc.Kind]) -> ResotoClient:
     """
     Note: adding this fixture to a test: a complete resotocore process is started.
           The fixture ensures that the underlying process has entered the ready state.
           It also ensures to clean up the process, when the test is done.
     """
 
-    # wipe and cleanly import the test model
-    test_db.collection("model").truncate()
-    test_db.collection("model").insert_many(
-        [{"_key": elem.fqn, **to_js(elem)} for elem in foo_kinds]
-    )
-
-    process = Process(
-        target=run,
-        args=(
-            [
-                "--graphdb-database",
-                "test",
-                "--graphdb-username",
-                "test",
-                "--graphdb-password",
-                "test",
-                "--debug",
-                "--no-tls",
-            ],
-        ),
-    )
-    process.start()
-    ready = False
+    # test_db.collection("model").truncate()
+    # to_insert = [{"_key": elem.fqn, **to_js(elem)} for elem in foo_kinds]
+    # test_db.collection("model").insert_many(to_insert)
+    # {'_key': 'child', 'allow_unknown_props': False, 'bases': ['foo'], 'fqn': 'child', 'properties': []}
+    # {'_key': 'child', 'bases': ['foo'], 'fqn': 'child', 'properties': [], 'runtime_kind': None}
     count = 10
+    ready = False
     while not ready:
         time.sleep(0.5)
         try:
-            requests.get("http://localhost:8900/system/ready", verify=False)
+            requests.get("https://localhost:8900/system/ready", verify=False)
             ready = True
         except Exception:
             count -= 1
             if count == 0:
-                raise AssertionError("Process does not came up as expected")
-    yield ResotoClient("http://localhost:8900", None)
-    # terminate the process
-    process.terminate()
-    process.join(5)
-    # if it is still running, kill it
-    if process.is_alive():
-        process.kill()
-        process.join()
-    process.close()
+                raise AssertionError("Resotocore does not came up as expected")
+
+    # wipe and cleanly import the test model
+    client = ResotoClient("https://localhost:8900", None)
+
+    client.update_model(foo_kinds)
+
+    return client
 
 
 g = "graphtest"
@@ -106,9 +77,6 @@ def test_system_api(core_client: ResotoClient) -> None:
 
 
 def test_model_api(core_client: ResotoClient) -> None:
-
-    # GET /model
-    assert len((core_client.model()).kinds) >= len(predefined_kinds)
 
     # PATCH /model
     string_kind: rc.Kind = rc.Kind(
@@ -134,18 +102,18 @@ def test_graph_api(core_client: ResotoClient) -> None:
         core_client.delete_graph(g)
 
     # create a new graph
-    graph = AccessJson(core_client.create_graph(g))
-    assert graph.id == "root"
-    assert graph.reported.kind == "graph_root"
+    graph = core_client.create_graph(g)
+    assert graph["id"] == "root"
+    assert graph["reported"]["kind"] == "graph_root"  # type: ignore
 
     # list all graphs
     graphs = core_client.list_graphs()
     assert g in graphs
 
     # get one specific graph
-    graph: AccessJson = AccessJson(core_client.get_graph(g))  # type: ignore
-    assert graph.id == "root"
-    assert graph.reported.kind == "graph_root"
+    graph = core_client.get_graph(g) or {}  # type: ignore
+    assert graph["id"] == "root"
+    assert graph["reported"]["kind"] == "graph_root"  # type: ignore
 
     # wipe the data in the graph
     assert core_client.delete_graph(g, truncate=True) == "Graph truncated."
@@ -153,23 +121,22 @@ def test_graph_api(core_client: ResotoClient) -> None:
 
     # create a node in the graph
     uid = rnd_str()
-    node = AccessJson(
-        core_client.create_node(
-            "root", uid, {"identifier": uid, "kind": "child", "name": "max"}, g
-        )
+    node = core_client.create_node(
+        "root", uid, {"identifier": uid, "kind": "child", "name": "max"}, g
     )
-    assert node.id == uid
-    assert node.reported.name == "max"
+
+    assert node["id"] == uid
+    assert node["reported"]["name"] == "max"  # type: ignore
 
     # update a node in the graph
-    node = AccessJson(core_client.patch_node(uid, {"name": "moritz"}, "reported", g))
-    assert node.id == uid
-    assert node.reported.name == "moritz"
+    node = core_client.patch_node(uid, {"name": "moritz"}, "reported", g)
+    assert node["id"] == uid
+    assert node["reported"]["name"] == "moritz"  # type: ignore
 
     # get the node
-    node = AccessJson(core_client.get_node(uid, g))
-    assert node.id == uid
-    assert node.reported.name == "moritz"
+    node = core_client.get_node(uid, g)
+    assert node["id"] == uid
+    assert node["reported"]["name"] == "moritz"  # type: ignore
 
     # delete the node
     core_client.delete_node(uid, g)
@@ -187,11 +154,11 @@ def test_graph_api(core_client: ResotoClient) -> None:
     )
     assert batch1_info == rc.GraphUpdate(0, 100, 0, 0, 0, 0)
     assert batch1_id == "batch1"
-    batch_infos = AccessJson.wrap_list(core_client.list_batches(g))
+    batch_infos = core_client.list_batches(g)
     assert len(batch_infos) == 1
     # assert batch_infos[0].id == batch1_id
-    assert batch_infos[0].affected_nodes == ["collector"]  # replace node
-    assert batch_infos[0].is_batch is True
+    assert batch_infos[0]["affected_nodes"] == ["collector"]  # replace node
+    assert batch_infos[0]["is_batch"] is True
     core_client.commit_batch(batch1_id, g)
 
     # batch graph update and abort
@@ -320,8 +287,8 @@ def test_cli(core_client: ResotoClient) -> None:
     ]
 
     # list all cli commands
-    info = AccessJson(core_client.cli_info())
-    assert len(info.commands) == 35
+    info = core_client.cli_info()
+    assert len(info["commands"]) == 35  # type: ignore
 
 
 def test_config(core_client: ResotoClient, foo_kinds: List[rc.Kind]) -> None:

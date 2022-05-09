@@ -36,7 +36,7 @@ def pyright(session: Session) -> None:
     """Type-check using mypy."""
     args = session.posargs or ["resotoclient", "tests"]
     session.install(".")
-    session.install("pyright", "pytest")
+    session.install("pyright", "pytest", "networkx")
     session.run("pyright", *args)
 
 
@@ -45,5 +45,5 @@ def pytest(session: Session) -> None:
     """Test using pytest"""
     args = session.posargs or ["tests"]
     session.install(".")
-    session.install("pytest")
+    session.install("pytest", "networkx")
     session.run("pytest", *args)

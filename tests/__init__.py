@@ -1,22 +1,35 @@
 """Test suite for the resotoclient package."""
 from abc import ABC
 from datetime import date, datetime
-from typing import List, Optional
+from typing import List, Optional, Set, Any, Dict
+from collections import namedtuple
 
 import pytest
-from arango import ArangoClient
-from arango.database import StandardDatabase
-from arango.typings import Json
 from networkx import MultiDiGraph
+from resotoclient.models import Kind, Property, JsObject
 
-from resotocore.db.graphdb import GraphDB
+import random
+import string
+import jsons
 
-from resotocore.db.model import QueryModel
-from resotocore.model.graph_access import GraphAccess, EdgeType
-from resotocore.model.model import Model, ComplexKind, Property, Kind, SyntheticProperty
-from resotocore.model.typed_model import from_js, to_js
-from resotocore.query.model import Query, P, Navigation
-from resotocore.util import utc
+
+def utc() -> datetime:
+    return datetime.utcnow()
+
+
+class EdgeType:
+    # This edge type defines the default relationship between resources.
+    # It is the main edge type and is assumed, if no edge type is given.
+    # The related graph is also used as source of truth for graph updates.
+    default: str = "default"
+
+    # This edge type defines the order of delete operations.
+    # A resource can be deleted, if all outgoing resources are deleted.
+    delete: str = "delete"
+
+    # The set of all allowed edge types.
+    # Note: the database schema has to be adapted to support additional edge types.
+    all: Set[str] = {default, delete}
 
 
 class BaseResource(ABC):
@@ -71,17 +84,37 @@ class Bla(BaseResource):
         return "bla"
 
 
+def to_js(node: Any, **kwargs: Any) -> JsObject:
+    # shortcut: assume a dict is already a json value
+    if isinstance(node, dict) and not kwargs.get("force_dict", False):
+        return node  # type: ignore
+    return jsons.dump(  # type: ignore
+        node,  # type: ignore
+        strip_privates=True,
+        strip_microseconds=True,
+        strip_class_variables=True,
+        **kwargs,
+    )
+
+
+EdgeKey = namedtuple("EdgeKey", ["from_node", "to_node", "edge_type"])  # type: ignore
+
+
+def edge_key(from_node: object, to_node: object, edge_type: str) -> EdgeKey:
+    return EdgeKey(from_node, to_node, edge_type)
+
+
 def create_graph(bla_text: str, width: int = 10) -> MultiDiGraph:
     graph = MultiDiGraph()
 
     def add_edge(
         from_node: str, to_node: str, edge_type: str = EdgeType.default
     ) -> None:
-        key = GraphAccess.edge_key(from_node, to_node, edge_type)
+        key = edge_key(from_node, to_node, edge_type)
         graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
 
     def add_node(
-        uid: str, kind: str, node: Optional[Json] = None, replace: bool = False
+        uid: str, kind: str, node: Optional[JsObject] = None, replace: bool = False
     ) -> None:
         reported = {**(node if node else to_json(Foo(uid))), "kind": kind}
         graph.add_node(  # type: ignore
@@ -119,7 +152,7 @@ def create_multi_collector_graph(width: int = 3) -> MultiDiGraph:
     def add_edge(
         from_node: str, to_node: str, edge_type: str = EdgeType.default
     ) -> None:
-        key = GraphAccess.edge_key(from_node, to_node, edge_type)
+        key = edge_key(from_node, to_node, edge_type)
         graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
 
     def add_node(node_id: str, kind: str, replace: bool = False) -> str:
@@ -173,92 +206,53 @@ def create_multi_collector_graph(width: int = 3) -> MultiDiGraph:
 
 @pytest.fixture
 def foo_kinds() -> List[Kind]:
-    base = ComplexKind(
-        "base",
-        [],
-        [
+    base = Kind(
+        fqn="base",
+        runtime_kind=None,
+        bases=[],
+        properties=[
             Property("identifier", "string", required=True),
             Property("kind", "string", required=True),
             Property("ctime", "datetime"),
         ],
     )
-    foo = ComplexKind(
-        "foo",
-        ["base"],
-        [
+    foo = Kind(
+        fqn="foo",
+        runtime_kind=None,
+        bases=["base"],
+        properties=[
             Property("name", "string"),
             Property("some_int", "int32"),
             Property("some_string", "string"),
             Property("now_is", "datetime"),
             Property("ctime", "datetime"),
-            Property(
-                "age", "trafo.duration_to_datetime", False, SyntheticProperty(["ctime"])
-            ),
+            Property("age", "trafo.duration_to_datetime", False),
         ],
     )
-    bla = ComplexKind(
-        "bla",
-        ["base"],
-        [
+    bla = Kind(
+        fqn="bla",
+        runtime_kind=None,
+        bases=["base"],
+        properties=[
             Property("name", "string"),
             Property("now", "date"),
             Property("f", "int32"),
             Property("g", "int32[]"),
         ],
     )
-    cloud = ComplexKind("cloud", ["foo"], [])
-    account = ComplexKind("account", ["foo"], [])
-    region = ComplexKind("region", ["foo"], [])
-    parent = ComplexKind("parent", ["foo"], [])
-    child = ComplexKind("child", ["foo"], [])
+    cloud = Kind(fqn="cloud", runtime_kind=None, bases=["foo"], properties=[])
+    account = Kind(fqn="account", runtime_kind=None, bases=["foo"], properties=[])
+    region = Kind(fqn="region", runtime_kind=None, bases=["foo"], properties=[])
+    parent = Kind(fqn="parent", runtime_kind=None, bases=["foo"], properties=[])
+    child = Kind(fqn="child", runtime_kind=None, bases=["foo"], properties=[])
     return [base, foo, bla, cloud, account, region, parent, child]
 
 
-@pytest.fixture
-def foo_model(foo_kinds: List[Kind]) -> Model:
-    return Model.from_kinds(foo_kinds)
-
-
-@pytest.fixture
-def local_client() -> ArangoClient:
-    return ArangoClient(hosts="http://localhost:8529")
-
-
-@pytest.fixture
-def system_db(local_client: ArangoClient) -> StandardDatabase:
-    return local_client.db()
-
-
-@pytest.fixture
-def test_db(
-    local_client: ArangoClient, system_db: StandardDatabase
-) -> StandardDatabase:
-    if not system_db.has_user("test"):
-        system_db.create_user("test", "test", True)
-
-    if not system_db.has_database("test"):
-        system_db.create_database(
-            "test", [{"username": "test", "password": "test", "active": True}]
-        )
-
-    # Connect to "test" database as "test" user.
-    return local_client.db("test", username="test", password="test")
-
-
-async def load_graph(
-    db: GraphDB, model: Model, base_id: str = "sub_root"
-) -> MultiDiGraph:
-    blas = Query.by("foo", P("identifier") == base_id).traverse_out(0, Navigation.Max)
-    return await db.search_graph(QueryModel(blas.on_section("reported"), model))
-
-
-def to_json(obj: BaseResource) -> Json:
+def to_json(obj: BaseResource) -> Dict[str, Any]:
     return {"kind": obj.kind(), **to_js(obj)}
 
 
-def to_bla(json: Json) -> Bla:
-    return from_js(json["reported"], Bla)
-
-
-def to_foo(json: Json) -> Foo:
-    return from_js(json["reported"], Foo)
+def rnd_str(str_len: int = 10) -> str:
+    return "".join(
+        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
+    )
