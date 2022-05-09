@@ -60,7 +60,10 @@ def core_client(foo_kinds: List[rc.Kind]) -> ResotoClient:
                 raise AssertionError("Resotocore does not came up as expected")
 
     # wipe and cleanly import the test model
-    client = ResotoClient("https://localhost:8900", None)
+    client = ResotoClient("https://localhost:8900", "changeme")
+
+    # chech that connection is possible
+    list(client.cli_execute("system info"))
 
     client.update_model(foo_kinds)
 
