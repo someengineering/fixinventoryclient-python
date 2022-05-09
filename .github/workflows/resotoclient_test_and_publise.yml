@@ -1,0 +1,67 @@
+name: Test and publish (resotoclient)
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'resotoclient/**'
+      - '.github/**'
+  pull_request:
+    paths:
+      - 'resotoclient/**'
+      - '.github/**'
+
+jobs:
+  resotoclient-test-and-build:
+    name: "Test and build (resotoclient)"
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./resotoclient
+    services:
+      arangodb:
+        image: arangodb:3.8.3
+        env:
+          ARANGO_NO_AUTH: 1
+        ports:
+          - 8529:8529
+      resotocore:
+        image: somecr.io/someengineering/resoto:2.1.0
+        env:
+          RESOTOCORE_ANALYTICS_OPT_OUT: true
+        ports:
+          - 8900:8900
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Setup Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 'pypy-3.9-v7.3.9'
+          architecture: 'x64'
+      - name: Restore dependency cache
+        uses: actions/cache@v2
+        with:
+          path: ~/.cache/pypoetry
+          key: $\{\{runner.os}}-poetry-$\{\{hashFiles('poetry.lock')}}
+          restore-keys: |
+            $\{\{ runner.os }}-poetry-
+      - name: Install Dependencies
+        run: |
+          python -m pip install --upgrade pip poetry nox nox-poetry
+          poetry install
+      - name: Run nox
+        env:
+          RESOTOCORE_ANALYTICS_OPT_OUT: true
+        run: nox
+      - name: Build a binary wheel and a source tarball
+        run: >-
+          poetry build
+      - name: Publish distribution to PyPI
+        if: github.ref_type == 'tag'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          user: __token__
+          password: ${{ secrets.PYPI_RESOTOCLIENTn }}
+          packages_dir: ./resotoclient/dist/
