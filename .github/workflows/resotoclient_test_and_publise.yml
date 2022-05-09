@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./resotoclient
+        working-directory: ./
     services:
       arangodb:
         image: arangodb:3.8.3
@@ -64,4 +64,4 @@ jobs:
         with:
           user: __token__
           password: ${{ secrets.PYPI_RESOTOCLIENTn }}
-          packages_dir: ./resotoclient/dist/
+          packages_dir: ./dist/
