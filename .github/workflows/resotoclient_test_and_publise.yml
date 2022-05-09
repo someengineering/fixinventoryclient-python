@@ -26,9 +26,10 @@ jobs:
         ports:
           - 8529:8529
       resotocore:
-        image: somecr.io/someengineering/resotocore:2.1.0
+        image: somecr.io/someengineering/resoto:2.1.0
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
+          PSK: 42
         ports:
           - 8900:8900
 
