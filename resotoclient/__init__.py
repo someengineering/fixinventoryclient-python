@@ -159,8 +159,16 @@ class ResotoClient:
             return s.delete(self.resotocore_url + path, params=params)
 
     def model(self) -> Model:
-        response = self._get("/model")
-        return json_load(response.json(), Model)
+        response: JsValue = self._get("/model").json()
+        # ResotoClient <= 2.2 returns a model dict fqn: kind.
+        if isinstance(response, dict):
+            return json_load(response, Model)
+        # ResotoClient > 2.2 returns a list of kinds.
+        elif isinstance(response, list):
+            kinds = {kd.fqn: kd for k in response if (kd := json_load(k, Kind))}
+            return Model(kinds)
+        else:
+            raise ValueError(f"Can not map to model. Unexpected response: {response}")
 
     def update_model(self, update: List[Kind]) -> Model:
         response = self._patch("/model", json=json_dump(update, List[Kind]))
