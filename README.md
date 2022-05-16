@@ -19,6 +19,18 @@ for instance in instances_csv:
     print(instance)
 ```
 
+## Test
+
+A local test environment is required. See the [contribution guide](https://resoto.com/docs/contributing/components) for instructions.
+
+The tests expect a ResotoCore on localhost with the default PSK `changeme`.
+You can start it locally via: `resotocore --graphdb-database resotoclient_test --psk changeme`
+
+To run the tests, run: `nox`.
+
+
+```bash 
+
 For more examples see the examples directory.
 
 ## Publish
