@@ -30,6 +30,8 @@ class Kind:
     runtime_kind: Optional[str]
     properties: Optional[List[Property]]
     bases: Optional[List[str]]
+    aggregate_root: Optional[bool] = True
+    successor_kinds: Optional[Dict[str, List[str]]] = None
 
 
 @dataclass
