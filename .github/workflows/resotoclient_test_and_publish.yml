@@ -6,6 +6,8 @@ on:
     paths:
       - 'resotoclient/**'
       - '.github/**'
+    tags:
+      - "*.*.*"
   pull_request:
     paths:
       - 'resotoclient/**'
