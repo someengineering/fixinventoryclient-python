@@ -476,7 +476,7 @@ class ResotoClient:
         headers = headers or {}
         if not files:
             headers["Content-Type"] = "text/plain"
-            body = command
+            body = command.encode("utf-8")
         else:
             headers["Resoto-Shell-Command"] = command
             headers["Content-Type"] = "multipart/form-data; boundary=file-upload"

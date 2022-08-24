@@ -289,6 +289,9 @@ def test_cli(core_client: ResotoClient) -> None:
         "total unmatched: 0",
     ]
 
+    # make sure non latin characters are handled correctly
+    assert core_client.cli_execute('search is(foo) and id="我的第"') == []
+
 
 def test_config(core_client: ResotoClient, foo_kinds: List[rc.Kind]) -> None:
     # make sure we have a clean slate
