@@ -290,7 +290,7 @@ def test_cli(core_client: ResotoClient) -> None:
     ]
 
     # make sure non latin characters are handled correctly
-    assert core_client.cli_execute('search is(foo) and id="我的第"') == []
+    assert list(core_client.cli_execute('search is(foo) and id="我的第"', g)) == []
 
 
 def test_config(core_client: ResotoClient, foo_kinds: List[rc.Kind]) -> None:
