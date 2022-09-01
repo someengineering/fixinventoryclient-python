@@ -34,6 +34,12 @@ import random
 import string
 from datetime import timedelta
 
+try:
+    from pandas import DataFrame
+except ImportError:
+    DataFrame = None
+
+
 FilenameLookup = Dict[str, str]
 
 log: logging.Logger = logging.getLogger("resotoclient")
@@ -642,8 +648,50 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
+    def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto") -> DataFrame:  # type: ignore
+        if DataFrame is None:
+            raise ImportError("resotoclient[pandas] is not installed")
+
+        iter = self.search_list(search=search, section=section, graph=graph)
+
+        def extract_node(node: JsObject) -> Optional[JsObject]:
+            reported = node.get("reported")
+            if not isinstance(reported, Dict):
+                return None
+            reported["account_id"] = js_find(
+                node,
+                ["ancestors", "account", "reported", "id"],
+            )
+            reported["region_id"] = js_find(
+                node,
+                ["ancestors", "region", "reported", "id"],
+            )
+            reported["cloud_id"] = js_find(
+                node,
+                ["ancestors", "cloud", "reported", "id"],
+            )
+            return reported
+
+        nodes = [extract_node(node) for node in iter]
+        return DataFrame(nodes)
+
 
 def rnd_str(str_len: int = 10) -> str:
     return "".join(
         random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
     )
+
+
+def js_find(node: JsObject, path: List[str]) -> Optional[str]:
+    """
+    Get a value in a nested dict.
+    """
+    if len(path) == 0:
+        return None
+    else:
+        value = node.get(path[0])
+        if len(path) == 1:
+            return value if isinstance(value, str) else None
+        if not isinstance(value, dict):
+            return None
+        return js_find(value, path[1:])

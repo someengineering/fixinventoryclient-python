@@ -40,6 +40,10 @@ requests="^2.27.1"
 PyJWT="^2.3.0"
 cryptography=">=36.0.2"
 requests-toolbelt = "^0.9.1"
+pandas = { version = "^1.4.2", optional = true }
+
+[tool.poetry.extras]
+pandas = ["pandas"]
 
 [tool.poetry.dev-dependencies]
 pytest = "^6.2.5"
