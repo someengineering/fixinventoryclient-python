@@ -41,9 +41,11 @@ from collections import defaultdict
 
 try:
     from pandas import DataFrame  # type: ignore
-    from graphviz import Digraph  # type: ignore
 except ImportError:
     DataFrame = None
+try:
+    from graphviz import Digraph  # type: ignore
+except ImportError:
     Digraph = None
 
 
