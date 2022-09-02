@@ -35,7 +35,7 @@ def safety(session: Session) -> None:
 def pyright(session: Session) -> None:
     """Type-check using mypy."""
     args = session.posargs or ["resotoclient", "tests"]
-    session.install(".")
+    session.install(".[extras]")
     session.install("pyright", "pytest", "networkx")
     session.run("pyright", *args)
 
