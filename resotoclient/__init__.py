@@ -40,8 +40,8 @@ from enum import Enum
 from collections import defaultdict
 
 try:
-    from pandas import DataFrame
-    from graphviz import Digraph
+    from pandas import DataFrame  # type: ignore
+    from graphviz import Digraph  # type: ignore
 except ImportError:
     DataFrame = None
     Digraph = None
