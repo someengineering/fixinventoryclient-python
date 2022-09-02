@@ -2,13 +2,17 @@
 Python client for Resoto
 
 ## Installation
-
 ```bash
 pip install resotoclient
 ```
 
-## Usage
+For GraphVis and Pandas support:
 
+```bash
+pip install resotoclient[extras]
+```
+
+## Usage
 ```python
 from resotoclient import ResotoClient
 
@@ -19,9 +23,17 @@ for instance in instances_csv:
     print(instance)
 ```
 
+### Pandas Dataframes
+```python
+df = client.dataframe("is(instance)")
+```
+
+### GraphViz Digraph
+```python
+graph = client.graphviz("is(graph_root) -->")
+```
+
 ## Test
-
-
 The tests expect a ResotoCore on localhost with the default PSK `changeme`.
 You can start it locally via:
 
@@ -40,7 +52,6 @@ $> nox
 For more examples see the examples directory.
 
 ## Publish
-
 - bump the version number in pyproject.toml
 - `poetry build`
 - `poetry publish`
