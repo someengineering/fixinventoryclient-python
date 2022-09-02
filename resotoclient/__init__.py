@@ -659,7 +659,7 @@ class ResotoClient:
 
     def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto") -> DataFrame:  # type: ignore
         if DataFrame is None:
-            raise ImportError("resotoclient[extras] is not installed")
+            raise ImportError("Python package resotoclient[extras] is not installed")
 
         iter = self.search_list(search=search, section=section, graph=graph)
 
@@ -713,7 +713,7 @@ class ResotoClient:
         format: str = "svg",
     ) -> Digraph:  # type: ignore
         if Digraph is None:
-            raise ImportError("resotoclient[extras] is not installed")
+            raise ImportError("Python package resotoclient[extras] is not installed")
 
         digraph = Digraph(comment=search)
         digraph.format = format
