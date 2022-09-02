@@ -34,6 +34,21 @@ import random
 import string
 from datetime import timedelta
 
+import sys
+from dataclasses import dataclass
+from enum import Enum
+from collections import defaultdict
+
+try:
+    from pandas import DataFrame  # type: ignore
+except ImportError:
+    DataFrame = None
+try:
+    from graphviz import Digraph  # type: ignore
+except ImportError:
+    Digraph = None
+
+
 FilenameLookup = Dict[str, str]
 
 log: logging.Logger = logging.getLogger("resotoclient")
@@ -642,8 +657,193 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
+    def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto") -> DataFrame:  # type: ignore
+        if DataFrame is None:
+            raise ImportError("Python package resotoclient[extras] is not installed")
+
+        iter = self.search_list(search=search, section=section, graph=graph)
+
+        def extract_node(node: JsObject) -> Optional[JsObject]:
+            reported = node.get("reported")
+            if not isinstance(reported, Dict):
+                return None
+            reported["cloud_id"] = js_find(
+                node,
+                ["ancestors", "cloud", "reported", "id"],
+            )
+            reported["cloud_name"] = js_find(
+                node,
+                ["ancestors", "cloud", "reported", "name"],
+            )
+            reported["account_id"] = js_find(
+                node,
+                ["ancestors", "account", "reported", "id"],
+            )
+            reported["account_name"] = js_find(
+                node,
+                ["ancestors", "account", "reported", "name"],
+            )
+            reported["region_id"] = js_find(
+                node,
+                ["ancestors", "region", "reported", "id"],
+            )
+            reported["region_name"] = js_find(
+                node,
+                ["ancestors", "region", "reported", "name"],
+            )
+            reported["zone_id"] = js_find(
+                node,
+                ["ancestors", "zone", "reported", "id"],
+            )
+            reported["zone_name"] = js_find(
+                node,
+                ["ancestors", "zone", "reported", "name"],
+            )
+            return reported
+
+        nodes = [extract_node(node) for node in iter]
+        return DataFrame(nodes)
+
+    def graphviz(
+        self,
+        search: str,
+        section: Optional[str] = "reported",
+        graph: str = "resoto",
+        engine: str = "sfdp",
+        format: str = "svg",
+    ) -> Digraph:  # type: ignore
+        if Digraph is None:
+            raise ImportError("Python package resotoclient[extras] is not installed")
+
+        digraph = Digraph(comment=search)
+        digraph.format = format
+        digraph.engine = engine
+        digraph.graph_attr = {"rankdir": "LR", "splines": "true", "overlap": "false"}  # type: ignore
+        digraph.node_attr = {  # type: ignore
+            "shape": "plain",
+            "colorscheme": "paired12",
+        }
+        cit = iter(range(0, sys.maxsize))
+        colors: Dict[str, int] = defaultdict(lambda: (next(cit) % 12) + 1)
+
+        results = self.search_graph(search=search, section=section, graph=graph)
+
+        for elem in results:
+            if elem.get("type") == "node":
+                kind = js_get(elem, ["reported", "kind"])
+                color = colors[kind]
+                rd = ResourceDescription(
+                    id=js_get(elem, ["reported", "id"]),
+                    name=js_get(elem, ["reported", "name"]),
+                    uid=js_get(elem, ["id"]),
+                    kind=parse_kind(kind),
+                    kind_name=kind,
+                )
+                digraph.node(  # type: ignore
+                    name=js_get(elem, ["id"]),
+                    # label=rd.name,
+                    label=render_resource(rd, color),
+                    shape="plain",
+                )
+            elif elem.get("type") == "edge":
+                digraph.edge(js_get(elem, ["from"]), js_get(elem, ["to"]))  # type: ignore
+
+        return digraph
+
 
 def rnd_str(str_len: int = 10) -> str:
     return "".join(
         random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
     )
+
+
+def js_find(node: JsObject, path: List[str]) -> Optional[str]:
+    """
+    Get a value in a nested dict.
+    """
+    if len(path) == 0:
+        return None
+    else:
+        value = node.get(path[0])
+        if len(path) == 1:
+            return value if isinstance(value, str) else None
+        if not isinstance(value, dict):
+            return None
+        return js_find(value, path[1:])
+
+
+def js_get(node: JsObject, path: List[str]) -> str:
+    result = js_find(node, path)
+    if result is None:
+        raise ValueError(f"Path {path} not found in {node}")
+    return result
+
+
+class ResourceKind(Enum):
+    UNKNOWN = 1
+    INSTANCE = 2
+    VOLUME = 3
+    IMAGE = 4
+    FIREWALL = 5
+    K8S_CLUSER = 6
+    NETWORK = 7
+    LOAD_BALANCER = 8
+    CLOUD = 9
+
+
+do_kinds = {
+    "droplet": ResourceKind.INSTANCE,
+    "volume": ResourceKind.VOLUME,
+    "image": ResourceKind.IMAGE,
+    "firewall": ResourceKind.FIREWALL,
+    "kubernetes_cluster": ResourceKind.K8S_CLUSER,
+    "network": ResourceKind.NETWORK,
+    "load_balancer": ResourceKind.LOAD_BALANCER,
+}
+
+
+def parse_kind(kind: str) -> ResourceKind:
+    cloud, rest = kind.split("_")[0], "_".join(kind.split("_")[1:])
+    if cloud == "digitalocean":
+        return do_kinds.get(rest) or ResourceKind.UNKNOWN
+    else:
+        return ResourceKind.UNKNOWN
+
+
+kind_colors = {
+    ResourceKind.INSTANCE: "8",
+    ResourceKind.VOLUME: "4",
+    ResourceKind.IMAGE: "7",
+    ResourceKind.FIREWALL: "6",
+    ResourceKind.K8S_CLUSER: "5",
+    ResourceKind.NETWORK: "10",
+    ResourceKind.LOAD_BALANCER: "9",
+    ResourceKind.CLOUD: "1",
+}
+
+
+@dataclass
+class ResourceDescription:
+    uid: str
+    name: str
+    id: str
+    kind: ResourceKind
+    kind_name: str
+
+
+def render_resource(
+    resource: ResourceDescription,
+    color: int,
+) -> str:
+    return f"""\
+<<TABLE STYLE="ROUNDED" COLOR="{color}" BORDER="3" CELLBORDER="1" CELLPADDING="5">
+    <TR>
+        <TD SIDES="B">{resource.kind_name}</TD>
+    </TR>
+    <TR>
+        <TD SIDES="B">{resource.id}</TD>
+    </TR>
+    <TR>
+        <TD BORDER="0">{resource.name}</TD>
+    </TR>
+</TABLE>>"""
