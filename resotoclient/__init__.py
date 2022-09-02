@@ -665,17 +665,37 @@ class ResotoClient:
             reported = node.get("reported")
             if not isinstance(reported, Dict):
                 return None
+            reported["cloud_id"] = js_find(
+                node,
+                ["ancestors", "cloud", "reported", "id"],
+            )
+            reported["cloud_name"] = js_find(
+                node,
+                ["ancestors", "cloud", "reported", "name"],
+            )
             reported["account_id"] = js_find(
                 node,
                 ["ancestors", "account", "reported", "id"],
+            )
+            reported["account_name"] = js_find(
+                node,
+                ["ancestors", "account", "reported", "name"],
             )
             reported["region_id"] = js_find(
                 node,
                 ["ancestors", "region", "reported", "id"],
             )
-            reported["cloud_id"] = js_find(
+            reported["region_name"] = js_find(
                 node,
-                ["ancestors", "cloud", "reported", "id"],
+                ["ancestors", "region", "reported", "name"],
+            )
+            reported["zone_id"] = js_find(
+                node,
+                ["ancestors", "zone", "reported", "id"],
+            )
+            reported["zone_name"] = js_find(
+                node,
+                ["ancestors", "zone", "reported", "name"],
             )
             return reported
 
