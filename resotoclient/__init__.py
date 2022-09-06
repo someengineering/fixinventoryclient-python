@@ -41,6 +41,7 @@ from collections import defaultdict
 
 try:
     from pandas import DataFrame  # type: ignore
+    import pandas as pd
 except ImportError:
     DataFrame = None
 try:
@@ -371,10 +372,13 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def search_aggregate(
-        self, search: str, graph: str = "resoto"
+        self, search: str, section: Optional[str] = None, graph: str = "resoto"
     ) -> Iterator[JsObject]:
+        params = {}
+        if section:
+            params["section"] = section
         response = self._post(
-            f"/graph/{graph}/search/aggregate", data=search, stream=True
+            f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True
         )
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
@@ -657,52 +661,75 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto") -> DataFrame:  # type: ignore
+    def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True) -> DataFrame:  # type: ignore
         if DataFrame is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
+        aggregate_search = False
 
-        iter = self.search_list(search=search, section=section, graph=graph)
+        if search.startswith("aggregate"):
+            aggregate_search = True
+            iter = self.search_aggregate(search=search, section=section, graph=graph)
+        else:
+            iter = self.search_list(search=search, section=section, graph=graph)
 
         def extract_node(node: JsObject) -> Optional[JsObject]:
-            reported = node.get("reported")
-            if not isinstance(reported, Dict):
+            node_data = node
+            if not isinstance(node_data, dict):
                 return None
-            reported["cloud_id"] = js_find(
-                node,
-                ["ancestors", "cloud", "reported", "id"],
-            )
-            reported["cloud_name"] = js_find(
-                node,
-                ["ancestors", "cloud", "reported", "name"],
-            )
-            reported["account_id"] = js_find(
-                node,
-                ["ancestors", "account", "reported", "id"],
-            )
-            reported["account_name"] = js_find(
-                node,
-                ["ancestors", "account", "reported", "name"],
-            )
-            reported["region_id"] = js_find(
-                node,
-                ["ancestors", "region", "reported", "id"],
-            )
-            reported["region_name"] = js_find(
-                node,
-                ["ancestors", "region", "reported", "name"],
-            )
-            reported["zone_id"] = js_find(
-                node,
-                ["ancestors", "zone", "reported", "id"],
-            )
-            reported["zone_name"] = js_find(
-                node,
-                ["ancestors", "zone", "reported", "name"],
-            )
-            return reported
+            if aggregate_search:
+                if (
+                    flatten
+                    and "group" in node_data
+                    and isinstance(node_data["group"], dict)
+                ):
+                    group = node_data["group"]
+                    del node_data["group"]
+                    for k, v in group.items():
+                        node_data[k] = v
+            else:
+                if flatten:
+                    if not "reported" in node or not isinstance(node["reported"], dict):
+                        return None
+                    node_data = node["reported"]
+                    for k, v in node.items():
+                        if isinstance(v, dict) and k != "reported":
+                            node_data[k] = v
+                    node_data["cloud_id"] = js_find(
+                        node,
+                        ["ancestors", "cloud", "reported", "id"],
+                    )
+                    node_data["cloud_name"] = js_find(
+                        node,
+                        ["ancestors", "cloud", "reported", "name"],
+                    )
+                    node_data["account_id"] = js_find(
+                        node,
+                        ["ancestors", "account", "reported", "id"],
+                    )
+                    node_data["account_name"] = js_find(
+                        node,
+                        ["ancestors", "account", "reported", "name"],
+                    )
+                    node_data["region_id"] = js_find(
+                        node,
+                        ["ancestors", "region", "reported", "id"],
+                    )
+                    node_data["region_name"] = js_find(
+                        node,
+                        ["ancestors", "region", "reported", "name"],
+                    )
+                    node_data["zone_id"] = js_find(
+                        node,
+                        ["ancestors", "zone", "reported", "id"],
+                    )
+                    node_data["zone_name"] = js_find(
+                        node,
+                        ["ancestors", "zone", "reported", "name"],
+                    )
+            return node_data
 
         nodes = [extract_node(node) for node in iter]
-        return DataFrame(nodes)
+        return pd.json_normalize(nodes)  # type: ignore
 
     def graphviz(
         self,
