@@ -343,7 +343,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def search_list(
-        self, search: str, section: Optional[str] = None, graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
         params = {}
         if section:
@@ -358,7 +358,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def search_graph(
-        self, search: str, section: Optional[str] = None, graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
         params = {}
         if section:
@@ -372,7 +372,7 @@ class ResotoClient:
             raise AttributeError(response.text)
 
     def search_aggregate(
-        self, search: str, section: Optional[str] = None, graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
         params = {}
         if section:
