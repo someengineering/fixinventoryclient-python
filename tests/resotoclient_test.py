@@ -207,7 +207,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
 
     # aggregate
     result_aggregate = core_client.search_aggregate(
-        "aggregate(reported.kind as kind: sum(1) as count): all", g
+        "aggregate(reported.kind as kind: sum(1) as count): all", graph=g
     )
     assert {r["group"]["kind"]: r["count"] for r in result_aggregate} == {  # type: ignore
         "bla": 100,
