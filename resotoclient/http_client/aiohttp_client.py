@@ -81,7 +81,39 @@ class AioHttpClient(AsyncHttpClient):
         headers: Optional[Dict[str, str]] = None,
         stream: bool = False,
     ) -> HttpResponse:
-        pass
+        """
+        Make a POST request to the server.
+
+        Args:
+            path: The path to the resource.
+            json: The json body to send with the request.
+            data: The data body to send with the request.
+            params: The query parameters to add to the request.
+            headers: The headers to add to the request.
+            stream: Whether to stream the response body.
+
+        If a streamed respones was requested, you MUST consume the whole response body
+        or call release to return the connecton back into the pool.
+        """
+
+        query_params = self._default_query_params().update(params or {})
+        url = URL(self.url).with_path(path).with_query(query_params)
+        if stream:
+            headers = (headers or {}).update({"Accept": "application/x-ndjson"})
+        resp = await self.session.post(url, ssl=self._ssl_context(), headers=headers, json=json, data=data)
+
+        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+            async for line in response.content:
+                yield line
+
+        return HttpResponse(
+            status_code=resp.status,
+            headers=resp.headers,
+            text=resp.text,
+            json=resp.json,
+            async_iter_lines=lambda: lines(resp),
+            release=resp.release,
+        )
 
     async def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
         pass
