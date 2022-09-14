@@ -1,6 +1,4 @@
 import logging
-import requests
-from requests.structures import CaseInsensitiveDict
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import (
     Any,
@@ -29,6 +27,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
+from resotoclient.http_client.sync_client import SyncHttpClient, HttpResponse
 from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
@@ -78,6 +77,7 @@ class ResotoClient:
             custom_ca_cert_path=custom_ca_cert_path,
             renew_before=renew_before,
         )
+        self.sync_client = SyncHttpClient(url, psk, rnd_str(), self.holder.ca_cert_path if verify else None)
 
     def __enter__(self) -> "ResotoClient":
         self.start()
@@ -93,9 +93,11 @@ class ResotoClient:
 
     def start(self) -> None:
         self.holder.start()
+        self.sync_client.start()
 
     def shutdown(self) -> None:
         self.holder.shutdown()
+        self.sync_client.stop()
 
     def _headers(self) -> Dict[str, str]:
 
@@ -106,30 +108,16 @@ class ResotoClient:
 
         return headers
 
-    def _prepare_session(self, session: requests.Session) -> None:
-        if self.verify:
-            session.verify = self.holder.ca_cert_path()
-        else:
-            session.verify = False
-        session.headers = CaseInsensitiveDict(self._headers())
-        params: Dict[str, str] = {}
-        params["session_id"] = self.session_id
-        session.params = params
-
     def _get(
         self,
         path: str,
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
         stream: bool = False,
-    ) -> requests.Response:
-        with requests.Session() as s:
-            self._prepare_session(s)
-            s.headers.update(headers or {})
-            if stream:
-                s.stream = True
-                s.headers.update({"Accept": "application/x-ndjson"})
-            return s.get(self.resotocore_url + path, params=params)
+    ) -> HttpResponse:
+        if not self.sync_client.running():
+            self.sync_client.start()
+        return self.sync_client.get(path, params, headers, stream)
 
     def _post(
         self,
@@ -139,36 +127,25 @@ class ResotoClient:
         params: Optional[Dict[str, str]] = None,
         headers: Optional[Dict[str, str]] = None,
         stream: bool = False,
-    ) -> requests.Response:
-        with requests.Session() as s:
-            self._prepare_session(s)
-            if stream:
-                s.stream = True
-                s.headers.update({"Accept": "application/ndjson"})
-            if headers:
-                headers.update(headers)
-            return s.post(
-                self.resotocore_url + path,
-                data=data,
-                json=json,
-                params=params,
-                headers=headers,
-            )
+    ) -> HttpResponse:
+        if not self.sync_client.running():
+            self.sync_client.start()
+        return self.sync_client.post(path, json, data, params, headers, stream)
 
-    def _put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> requests.Response:
-        with requests.Session() as s:
-            self._prepare_session(s)
-            return s.put(self.resotocore_url + path, json=json, params=params)
+    def _put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
+        if not self.sync_client.running():
+            self.sync_client.start()
+        return self.sync_client.put(path, json, params)
 
-    def _patch(self, path: str, json: JsValue) -> requests.Response:
-        with requests.Session() as s:
-            self._prepare_session(s)
-            return s.patch(self.resotocore_url + path, json=json)
+    def _patch(self, path: str, json: JsValue) -> HttpResponse:
+        if not self.sync_client.running():
+            self.sync_client.start()
+        return self.sync_client.patch(path, json)
 
-    def _delete(self, path: str, params: Optional[Dict[str, str]] = None) -> requests.Response:
-        with requests.Session() as s:
-            self._prepare_session(s)
-            return s.delete(self.resotocore_url + path, params=params)
+    def _delete(self, path: str, params: Optional[Dict[str, str]] = None) -> HttpResponse:
+        if not self.sync_client.running():
+            self.sync_client.start()
+        return self.sync_client.delete(path, params)
 
     def model(self) -> Model:
         response: JsValue = self._get("/model").json()
@@ -205,7 +182,7 @@ class ResotoClient:
         props = {"truncate": "true"} if truncate else {}
         response = self._delete(f"/graph/{name}", params=props)
         # root node
-        return response.text
+        return response.text()
 
     def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
         response = self._post(
@@ -215,7 +192,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def patch_node(
         self,
@@ -232,21 +209,21 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
         response = self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def delete_node(self, node_id: str, graph: str = "resoto") -> None:
         response = self._delete(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 204:
             return None
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
         response = self._patch(
@@ -256,7 +233,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
         response = self._post(
@@ -266,7 +243,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), GraphUpdate)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def add_to_batch(
         self,
@@ -283,7 +260,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.headers["BatchId"], json_load(response.json(), GraphUpdate)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def list_batches(self, graph: str = "resoto") -> List[JsObject]:
         response = self._get(
@@ -292,7 +269,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def commit_batch(self, batch_id: str, graph: str = "resoto") -> None:
         response = self._post(
@@ -301,7 +278,7 @@ class ResotoClient:
         if response.status_code == 200:
             return None
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def abort_batch(self, batch_id: str, graph: str = "resoto") -> None:
         response = self._delete(
@@ -310,7 +287,7 @@ class ResotoClient:
         if response.status_code == 200:
             return None
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
         response = self._post(
@@ -320,7 +297,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
         response = self._post(
@@ -330,7 +307,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), EstimatedSearchCost)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def search_list(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
@@ -343,7 +320,7 @@ class ResotoClient:
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def search_graph(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
@@ -355,7 +332,7 @@ class ResotoClient:
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def search_aggregate(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
@@ -367,14 +344,14 @@ class ResotoClient:
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def subscribers(self) -> List[Subscriber]:
         response = self._get("/subscribers")
         if response.status_code == 200:
             return json_load(response.json(), List[Subscriber])
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def subscribers_for_event(self, event_type: str) -> List[Subscriber]:
         response = self._get(
@@ -383,7 +360,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), List[Subscriber])
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def subscriber(self, uid: str) -> Optional[Subscriber]:
         response = self._get(
@@ -402,7 +379,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), Subscriber)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def add_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
         props = {
@@ -416,7 +393,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), Subscriber)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def delete_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
         response = self._delete(
@@ -425,7 +402,7 @@ class ResotoClient:
         if response.status_code == 200:
             return json_load(response.json(), Subscriber)
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def delete_subscriber(self, uid: str) -> None:
         response = self._delete(
@@ -434,7 +411,7 @@ class ResotoClient:
         if response.status_code == 204:
             return None
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def cli_evaluate(
         self, command: str, graph: str = "resoto", **env: str
@@ -454,7 +431,7 @@ class ResotoClient:
                 for json in response.json()
             ]
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def cli_execute_raw(
         self,
@@ -464,7 +441,7 @@ class ResotoClient:
         headers: Optional[Dict[str, str]] = None,
         files: Optional[FilenameLookup] = None,
         **env: str,
-    ) -> requests.Response:
+    ) -> HttpResponse:
         props: Dict[str, str] = {}
         if graph:
             props["graph"] = graph
@@ -518,7 +495,7 @@ class ResotoClient:
         if response.status_code == 200:
             content_type = response.headers.get("Content-Type")
             if content_type == "text/plain":
-                return iter([response.text])
+                return iter([response.text()])
             elif content_type == "application/json":
                 return iter([response.json()])
             elif content_type == "application/x-ndjson":
@@ -526,21 +503,22 @@ class ResotoClient:
             else:
                 raise NotImplementedError(f"Unsupported content type: {content_type}. Use cli_execute_raw instead.")
         else:
-            raise AttributeError(response.text)
+            text = response.text()
+            raise AttributeError(text)
 
     def cli_info(self) -> JsObject:
         response = self._get("/cli/info")
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def configs(self) -> Iterator[str]:
         response = self._get("/configs", stream=True)
         if response.status_code == 200:
             return map(lambda l: json_loadb(l), response.iter_lines())
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def config(self, config_id: str) -> JsObject:
         response = self._get(
@@ -549,7 +527,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def put_config(self, config_id: str, json: JsObject, validate: bool = True) -> JsObject:
         params = {"validate": "true" if validate else "false"}
@@ -561,7 +539,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def patch_config(self, config_id: str, json: JsObject) -> JsObject:
         response = self._patch(
@@ -571,7 +549,7 @@ class ResotoClient:
         if response.status_code == 200:
             return response.json()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def delete_config(self, config_id: str) -> None:
         response = self._delete(
@@ -580,7 +558,7 @@ class ResotoClient:
         if response.status_code == 204:
             return None
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def get_configs_model(self) -> Model:
         response = self._get("/configs/model")
@@ -589,7 +567,7 @@ class ResotoClient:
             model = json_load(model_json, Model)
             return model
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def update_configs_model(self, update: List[Kind]) -> Model:
         response = self._patch(
@@ -623,16 +601,16 @@ class ResotoClient:
     def ping(self) -> str:
         response = self._get("/system/ping")
         if response.status_code == 200:
-            return response.text
+            return response.text()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def ready(self) -> str:
         response = self._get("/system/ready", headers={"Accept": "text/plain"})
         if response.status_code == 200:
-            return response.text
+            return response.text()
         else:
-            raise AttributeError(response.text)
+            raise AttributeError(response.text())
 
     def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True) -> DataFrame:  # type: ignore
         if DataFrame is None:

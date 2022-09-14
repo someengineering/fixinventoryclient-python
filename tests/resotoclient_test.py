@@ -1,5 +1,5 @@
 from contextlib import suppress
-from typing import List
+from typing import List, Iterator
 
 import pytest
 from _pytest.fixtures import fixture
@@ -19,9 +19,7 @@ from networkx import MultiDiGraph
 
 
 def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
-    ga: List[rc.JsObject] = [
-        {**node, "type": "node"} for _, node in graph.nodes(data=True)  # type: ignore
-    ]
+    ga: List[rc.JsObject] = [{**node, "type": "node"} for _, node in graph.nodes(data=True)]  # type: ignore
     for from_node, to_node, data in graph.edges(data=True):  # type: ignore
         ga.append(
             {  # type: ignore
@@ -35,7 +33,7 @@ def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
 
 
 @fixture
-def core_client(foo_kinds: List[rc.Kind]) -> ResotoClient:
+def core_client(foo_kinds: List[rc.Kind]) -> Iterator[ResotoClient]:
     """
     Note: adding this fixture to a test: a complete resotocore process is started.
           The fixture ensures that the underlying process has entered the ready state.
@@ -67,7 +65,9 @@ def core_client(foo_kinds: List[rc.Kind]) -> ResotoClient:
 
     client.update_model(foo_kinds)
 
-    return client
+    yield client
+
+    client.shutdown()
 
 
 g = "graphtest"
@@ -82,16 +82,12 @@ def test_system_api(core_client: ResotoClient) -> None:
 def test_model_api(core_client: ResotoClient) -> None:
 
     # PATCH /model
-    string_kind: rc.Kind = rc.Kind(
-        fqn="only_three", runtime_kind="string", properties=None, bases=None
-    )
+    string_kind: rc.Kind = rc.Kind(fqn="only_three", runtime_kind="string", properties=None, bases=None)
     setattr(string_kind, "min_length", 3)
     setattr(string_kind, "max_length", 3)
 
     prop = rc.Property(name="ot", kind="only_three", required=False)
-    complex_kind: rc.Kind = rc.Kind(
-        fqn="test_cpl", runtime_kind=None, properties=[prop], bases=None
-    )
+    complex_kind: rc.Kind = rc.Kind(fqn="test_cpl", runtime_kind=None, properties=[prop], bases=None)
     setattr(complex_kind, "allow_unknown_props", False)
 
     update = core_client.update_model([string_kind, complex_kind])
@@ -124,9 +120,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
 
     # create a node in the graph
     uid = rnd_str()
-    node = core_client.create_node(
-        "root", uid, {"identifier": uid, "kind": "child", "name": "max"}, g
-    )
+    node = core_client.create_node("root", uid, {"identifier": uid, "kind": "child", "name": "max"}, g)
 
     assert node["id"] == uid
     assert node["reported"]["name"] == "max"  # type: ignore
@@ -152,9 +146,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
     assert merged == rc.GraphUpdate(112, 1, 0, 212, 0, 0)
 
     # batch graph update and commit
-    batch1_id, batch1_info = core_client.add_to_batch(
-        graph_to_json(create_graph("hello")), "batch1", g
-    )
+    batch1_id, batch1_info = core_client.add_to_batch(graph_to_json(create_graph("hello")), "batch1", g)
     assert batch1_info == rc.GraphUpdate(0, 100, 0, 0, 0, 0)
     assert batch1_id == "batch1"
     batch_infos = core_client.list_batches(g)
@@ -165,9 +157,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
     core_client.commit_batch(batch1_id, g)
 
     # batch graph update and abort
-    batch2_id, batch2_info = core_client.add_to_batch(
-        graph_to_json(create_graph("bonjour")), "batch2", g
-    )
+    batch2_id, batch2_info = core_client.add_to_batch(graph_to_json(create_graph("bonjour")), "batch2", g)
     assert batch2_info == rc.GraphUpdate(0, 100, 0, 0, 0, 0)
     assert batch2_id == "batch2"
     core_client.abort_batch(batch2_id, g)
@@ -206,9 +196,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
     assert result_list[0].get("id") == "3"  # first node is the parent node
 
     # aggregate
-    result_aggregate = core_client.search_aggregate(
-        "aggregate(kind as kind: sum(1) as count): all", graph=g
-    )
+    result_aggregate = core_client.search_aggregate("aggregate(kind as kind: sum(1) as count): all", graph=g)
     assert {r["group"]["kind"]: r["count"] for r in result_aggregate} == {  # type: ignore
         "bla": 100,
         "cloud": 1,
@@ -240,9 +228,7 @@ def test_subscribers(core_client: ResotoClient) -> None:
     assert len(subscriber.subscriptions) == 0
 
     # update subscriber
-    updated = core_client.update_subscriber(
-        sub_id, [rc.Subscription("test"), rc.Subscription("rest")]
-    )
+    updated = core_client.update_subscriber(sub_id, [rc.Subscription("test"), rc.Subscription("rest")])
     assert updated is not None
     assert updated.id == sub_id
     assert len(updated.subscriptions) == 2
@@ -278,9 +264,7 @@ def test_cli(core_client: ResotoClient) -> None:
     )
 
     # execute search with count
-    executed = list(
-        core_client.cli_execute("search is(foo) or is(bla) | count kind", g)
-    )
+    executed = list(core_client.cli_execute("search is(foo) or is(bla) | count kind", g))
     assert executed == [
         "cloud: 1",
         "foo: 11",
@@ -307,9 +291,7 @@ def test_config(core_client: ResotoClient, foo_kinds: List[rc.Kind]) -> None:
     assert len(model.kinds) == len(get_model.kinds)
 
     # define config validation
-    validation = rc.ConfigValidation(
-        "external.validated.config", external_validation=True
-    )
+    validation = rc.ConfigValidation("external.validated.config", external_validation=True)
     assert core_client.put_config_validation(validation) == validation
 
     # get the config validation

@@ -18,12 +18,7 @@ class AioHttpClient(AsyncHttpClient):
         session: Optional[aiohttp.ClientSession] = None,
     ):
 
-        default_headers = {"Content-type": "application/json", "Accept": "application/json"}
-
-        if psk:
-            encode_jwt_to_headers(default_headers, {}, psk)
-
-        self.session = session if session else aiohttp.ClientSession(headers=default_headers)
+        self.session = session if session else aiohttp.ClientSession()
         self.url = url
         self.psk = psk
         self.get_ca_cert_path = get_ca_cert_path
@@ -37,6 +32,14 @@ class AioHttpClient(AsyncHttpClient):
 
     def _default_query_params(self) -> Dict[str, str]:
         return {"session_id": self.session_id}
+
+    def _default_headers(self) -> Dict[str, str]:
+        default_headers = {"Content-type": "application/json", "Accept": "application/json"}
+
+        if self.psk:
+            encode_jwt_to_headers(default_headers, {}, self.psk)
+
+        return default_headers
 
     async def lines(self, response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
         async for line in response.content:
@@ -62,11 +65,14 @@ class AioHttpClient(AsyncHttpClient):
         or call release to return the connecton back into the pool.
         """
 
-        query_params = self._default_query_params().update(params or {})
+        query_params = self._default_query_params()
+        query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
+        request_headers = self._default_headers()
+        request_headers.update(headers or {})
         if stream:
-            headers = (headers or {}).update({"Accept": "application/x-ndjson"})
-        resp = await self.session.get(url, ssl=self._ssl_context(), headers=headers)
+            request_headers.update({"Accept": "application/x-ndjson"})
+        resp = await self.session.get(url, ssl=self._ssl_context(), headers=request_headers)
 
         return HttpResponse(
             status_code=resp.status,
@@ -101,11 +107,14 @@ class AioHttpClient(AsyncHttpClient):
         or call release to return the connecton back into the pool.
         """
 
-        query_params = self._default_query_params().update(params or {})
+        query_params = self._default_query_params()
+        query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
+        request_headers = self._default_headers()
+        request_headers.update(headers or {})
         if stream:
-            headers = (headers or {}).update({"Accept": "application/x-ndjson"})
-        resp = await self.session.post(url, ssl=self._ssl_context(), headers=headers, json=json, data=data)
+            request_headers.update({"Accept": "application/x-ndjson"})
+        resp = await self.session.post(url, ssl=self._ssl_context(), headers=request_headers, json=json, data=data)
 
         return HttpResponse(
             status_code=resp.status,
@@ -127,9 +136,11 @@ class AioHttpClient(AsyncHttpClient):
 
         """
 
-        query_params = self._default_query_params().update(params or {})
+        query_params = self._default_query_params()
+        query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
-        resp = await self.session.put(url, ssl=self._ssl_context(), json=json)
+        request_headers = self._default_headers()
+        resp = await self.session.put(url, ssl=self._ssl_context(), headers=request_headers, json=json)
 
         return HttpResponse(
             status_code=resp.status,
@@ -150,7 +161,10 @@ class AioHttpClient(AsyncHttpClient):
         """
 
         url = URL(self.url).with_path(path)
-        resp = await self.session.patch(url, ssl=self._ssl_context(), json=json)
+
+        request_headers = self._default_headers()
+
+        resp = await self.session.patch(url, ssl=self._ssl_context(), headers=request_headers, json=json)
 
         return HttpResponse(
             status_code=resp.status,
@@ -170,9 +184,11 @@ class AioHttpClient(AsyncHttpClient):
 
         """
 
-        query_params = self._default_query_params().update(params or {})
+        query_params = self._default_query_params()
+        query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
-        resp = await self.session.delete(url, ssl=self._ssl_context())
+        request_headers = self._default_headers()
+        resp = await self.session.delete(url, ssl=self._ssl_context(), headers=request_headers)
 
         return HttpResponse(
             status_code=resp.status,

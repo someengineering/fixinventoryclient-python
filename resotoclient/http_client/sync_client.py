@@ -1,6 +1,6 @@
 from resotoclient.http_client.event_loop_thread import EventLoopThread
 from resotoclient.http_client.aiohttp_client import AioHttpClient
-from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator
+from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator, Any
 from resotoclient.models import JsValue
 import aiohttp
 from attrs import define
@@ -23,7 +23,7 @@ class HttpResponse:
     status_code: int
     headers: Mapping[str, str]
     text: Callable[[], str]
-    json: Callable[[], JsValue]
+    json: Callable[[], Any]
     iter_lines: Callable[[], Iterator[bytes]]
     release: Callable[[], None]
 
@@ -50,10 +50,16 @@ class SyncHttpClient:
         self.get_ca_cert_path = get_ca_cert_path
         self.session_id = session_id
         self.async_client = None
-        self.running = False
+
+    def running(self) -> bool:
+        return self.async_client is not None
 
     def start(self):
         self.event_loop_thread.start()
+        import time
+
+        while not self.event_loop_thread.running:
+            time.sleep(0.1)
         client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
         self.async_client = AioHttpClient(self.url, self.psk, self.session_id, self.get_ca_cert_path, client_session)
 
