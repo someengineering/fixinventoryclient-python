@@ -10,7 +10,12 @@ from yarl import URL
 
 class AioHttpClient(AsyncHttpClient):
     def __init__(
-        self, url: str, psk: Optional[str], session_id: str, get_ca_cert_path: Optional[Callable[[], str]] = None
+        self,
+        url: str,
+        psk: Optional[str],
+        session_id: str,
+        get_ca_cert_path: Optional[Callable[[], str]] = None,
+        session: Optional[aiohttp.ClientSession] = None,
     ):
 
         default_headers = {"Content-type": "application/json", "Accept": "application/json"}
@@ -18,7 +23,7 @@ class AioHttpClient(AsyncHttpClient):
         if psk:
             encode_jwt_to_headers(default_headers, {}, psk)
 
-        self.session = aiohttp.ClientSession(headers=default_headers)
+        self.session = session if session else aiohttp.ClientSession(headers=default_headers)
         self.url = url
         self.psk = psk
         self.get_ca_cert_path = get_ca_cert_path
@@ -32,6 +37,10 @@ class AioHttpClient(AsyncHttpClient):
 
     def _default_query_params(self) -> Dict[str, str]:
         return {"session_id": self.session_id}
+
+    async def lines(self, response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+        async for line in response.content:
+            yield line
 
     async def get(
         self,
@@ -59,16 +68,12 @@ class AioHttpClient(AsyncHttpClient):
             headers = (headers or {}).update({"Accept": "application/x-ndjson"})
         resp = await self.session.get(url, ssl=self._ssl_context(), headers=headers)
 
-        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
-            async for line in response.content:
-                yield line
-
         return HttpResponse(
             status_code=resp.status,
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
-            async_iter_lines=lambda: lines(resp),
+            async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
 
@@ -102,16 +107,12 @@ class AioHttpClient(AsyncHttpClient):
             headers = (headers or {}).update({"Accept": "application/x-ndjson"})
         resp = await self.session.post(url, ssl=self._ssl_context(), headers=headers, json=json, data=data)
 
-        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
-            async for line in response.content:
-                yield line
-
         return HttpResponse(
             status_code=resp.status,
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
-            async_iter_lines=lambda: lines(resp),
+            async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
 
@@ -130,16 +131,12 @@ class AioHttpClient(AsyncHttpClient):
         url = URL(self.url).with_path(path).with_query(query_params)
         resp = await self.session.put(url, ssl=self._ssl_context(), json=json)
 
-        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
-            async for line in response.content:
-                yield line
-
         return HttpResponse(
             status_code=resp.status,
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
-            async_iter_lines=lambda: lines(resp),
+            async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
 
@@ -155,16 +152,12 @@ class AioHttpClient(AsyncHttpClient):
         url = URL(self.url).with_path(path)
         resp = await self.session.patch(url, ssl=self._ssl_context(), json=json)
 
-        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
-            async for line in response.content:
-                yield line
-
         return HttpResponse(
             status_code=resp.status,
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
-            async_iter_lines=lambda: lines(resp),
+            async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
 
@@ -181,15 +174,11 @@ class AioHttpClient(AsyncHttpClient):
         url = URL(self.url).with_path(path).with_query(query_params)
         resp = await self.session.delete(url, ssl=self._ssl_context())
 
-        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
-            async for line in response.content:
-                yield line
-
         return HttpResponse(
             status_code=resp.status,
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
-            async_iter_lines=lambda: lines(resp),
+            async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
