@@ -116,10 +116,80 @@ class AioHttpClient(AsyncHttpClient):
         )
 
     async def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
-        pass
+        """
+        Make a PUT request to the server.
+
+        Args:
+            path: The path to the resource.
+            json: The json body to send with the request.
+            params: The query parameters to add to the request.
+
+        """
+
+        query_params = self._default_query_params().update(params or {})
+        url = URL(self.url).with_path(path).with_query(query_params)
+        resp = await self.session.put(url, ssl=self._ssl_context(), json=json)
+
+        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+            async for line in response.content:
+                yield line
+
+        return HttpResponse(
+            status_code=resp.status,
+            headers=resp.headers,
+            text=resp.text,
+            json=resp.json,
+            async_iter_lines=lambda: lines(resp),
+            release=resp.release,
+        )
 
     async def patch(self, path: str, json: JsValue) -> HttpResponse:
-        pass
+        """
+
+        Args:
+            path: The path to the resource.
+            json: The json body to send with the request.
+
+        """
+
+        url = URL(self.url).with_path(path)
+        resp = await self.session.patch(url, ssl=self._ssl_context(), json=json)
+
+        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+            async for line in response.content:
+                yield line
+
+        return HttpResponse(
+            status_code=resp.status,
+            headers=resp.headers,
+            text=resp.text,
+            json=resp.json,
+            async_iter_lines=lambda: lines(resp),
+            release=resp.release,
+        )
 
     async def delete(self, path: str, params: Optional[Dict[str, str]]) -> HttpResponse:
-        pass
+        """
+
+        Args:
+            path: The path to the resource.
+            params: The query parameters to add to the request.
+
+        """
+
+        query_params = self._default_query_params().update(params or {})
+        url = URL(self.url).with_path(path).with_query(query_params)
+        resp = await self.session.delete(url, ssl=self._ssl_context())
+
+        async def lines(response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
+            async for line in response.content:
+                yield line
+
+        return HttpResponse(
+            status_code=resp.status,
+            headers=resp.headers,
+            text=resp.text,
+            json=resp.json,
+            async_iter_lines=lambda: lines(resp),
+            release=resp.release,
+        )
