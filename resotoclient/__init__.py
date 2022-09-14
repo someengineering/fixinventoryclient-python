@@ -155,9 +155,7 @@ class ResotoClient:
                 headers=headers,
             )
 
-    def _put(
-        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
-    ) -> requests.Response:
+    def _put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
             return s.put(self.resotocore_url + path, json=json, params=params)
@@ -167,9 +165,7 @@ class ResotoClient:
             self._prepare_session(s)
             return s.patch(self.resotocore_url + path, json=json)
 
-    def _delete(
-        self, path: str, params: Optional[Dict[str, str]] = None
-    ) -> requests.Response:
+    def _delete(self, path: str, params: Optional[Dict[str, str]] = None) -> requests.Response:
         with requests.Session() as s:
             self._prepare_session(s)
             return s.delete(self.resotocore_url + path, params=params)
@@ -211,9 +207,7 @@ class ResotoClient:
         # root node
         return response.text
 
-    def create_node(
-        self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto"
-    ) -> JsObject:
+    def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
         response = self._post(
             f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
             json=node,
@@ -254,9 +248,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def patch_nodes(
-        self, nodes: Sequence[JsObject], graph: str = "resoto"
-    ) -> List[JsObject]:
+    def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
         response = self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
@@ -330,9 +322,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def search_graph_explain(
-        self, search: str, graph: str = "resoto"
-    ) -> EstimatedSearchCost:
+    def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
         response = self._post(
             f"/graph/{graph}/search/explain",
             data=search,
@@ -349,9 +339,7 @@ class ResotoClient:
         if section:
             params["section"] = section
 
-        response = self._post(
-            f"/graph/{graph}/search/list", params=params, data=search, stream=True
-        )
+        response = self._post(f"/graph/{graph}/search/list", params=params, data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
@@ -363,9 +351,7 @@ class ResotoClient:
         params = {}
         if section:
             params["section"] = section
-        response = self._post(
-            f"/graph/{graph}/search/graph", params=params, data=search, stream=True
-        )
+        response = self._post(f"/graph/{graph}/search/graph", params=params, data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
@@ -377,9 +363,7 @@ class ResotoClient:
         params = {}
         if section:
             params["section"] = section
-        response = self._post(
-            f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True
-        )
+        response = self._post(f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True)
         if response.status_code == 200:
             return map(lambda line: json_loadb(line), response.iter_lines())
         else:
@@ -410,9 +394,7 @@ class ResotoClient:
         else:
             return None
 
-    def update_subscriber(
-        self, uid: str, subscriptions: List[Subscription]
-    ) -> Optional[Subscriber]:
+    def update_subscriber(self, uid: str, subscriptions: List[Subscription]) -> Optional[Subscriber]:
         response = self._put(
             f"/subscriber/{uid}",
             json=json_dump(subscriptions),
@@ -466,9 +448,7 @@ class ResotoClient:
         if response.status_code == 200:
             return [
                 (
-                    ParsedCommands(
-                        json_load(json["parsed"], List[ParsedCommand]), json["env"]
-                    ),
+                    ParsedCommands(json_load(json["parsed"], List[ParsedCommand]), json["env"]),
                     json["execute"],
                 )
                 for json in response.json()
@@ -499,10 +479,7 @@ class ResotoClient:
         else:
             headers["Resoto-Shell-Command"] = command
             headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
-            parts = {
-                name: (name, open(path, "rb"), "application/octet-stream")
-                for name, path in files.items()
-            }
+            parts = {name: (name, open(path, "rb"), "application/octet-stream") for name, path in files.items()}
             body = MultipartEncoder(parts, "file-upload")
 
         response = self._post(
@@ -547,9 +524,7 @@ class ResotoClient:
             elif content_type == "application/x-ndjson":
                 return map(lambda line: json_loadb(line), response.iter_lines())
             else:
-                raise NotImplementedError(
-                    f"Unsupported content type: {content_type}. Use cli_execute_raw instead."
-                )
+                raise NotImplementedError(f"Unsupported content type: {content_type}. Use cli_execute_raw instead.")
         else:
             raise AttributeError(response.text)
 
@@ -576,9 +551,7 @@ class ResotoClient:
         else:
             raise AttributeError(response.text)
 
-    def put_config(
-        self, config_id: str, json: JsObject, validate: bool = True
-    ) -> JsObject:
+    def put_config(self, config_id: str, json: JsObject, validate: bool = True) -> JsObject:
         params = {"validate": "true" if validate else "false"}
         response = self._put(
             f"/config/{config_id}",
@@ -677,11 +650,7 @@ class ResotoClient:
             if not isinstance(node_data, dict):
                 return None
             if aggregate_search:
-                if (
-                    flatten
-                    and "group" in node_data
-                    and isinstance(node_data["group"], dict)
-                ):
+                if flatten and "group" in node_data and isinstance(node_data["group"], dict):
                     group = node_data["group"]
                     del node_data["group"]
                     for k, v in group.items():
@@ -779,9 +748,7 @@ class ResotoClient:
 
 
 def rnd_str(str_len: int = 10) -> str:
-    return "".join(
-        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
-    )
+    return "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len))
 
 
 def js_find(node: JsObject, path: List[str]) -> Optional[str]:
