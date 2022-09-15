@@ -42,8 +42,8 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[ResotoClient]:
 
     async def core_ready() -> bool:
         async with ClientSession() as session:
-            async with session.get("http://localhost:5000/api/v1/ready", ssl=False):
-                return True
+            async with session.get("https://localhost:8900/system/ready", ssl=False) as resp:
+                return resp.status == 200
 
     # test_db.collection("model").truncate()
     # to_insert = [{"_key": elem.fqn, **to_js(elem)} for elem in foo_kinds]
