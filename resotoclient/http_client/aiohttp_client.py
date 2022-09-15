@@ -34,7 +34,10 @@ class AioHttpClient(AsyncHttpClient):
         return {"session_id": self.session_id}
 
     def _default_headers(self) -> Dict[str, str]:
-        default_headers = {"Content-type": "application/json", "Accept": "application/json"}
+        default_headers = {
+            "Content-type": "application/json",
+            "Accept": "application/json",
+        }
 
         if self.psk:
             encode_jwt_to_headers(default_headers, {}, self.psk)
@@ -72,7 +75,9 @@ class AioHttpClient(AsyncHttpClient):
         request_headers.update(headers or {})
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
-        resp = await self.session.get(url, ssl=self._ssl_context(), headers=request_headers)
+        resp = await self.session.get(
+            url, ssl=self._ssl_context(), headers=request_headers
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -114,7 +119,9 @@ class AioHttpClient(AsyncHttpClient):
         request_headers.update(headers or {})
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
-        resp = await self.session.post(url, ssl=self._ssl_context(), headers=request_headers, json=json, data=data)
+        resp = await self.session.post(
+            url, ssl=self._ssl_context(), headers=request_headers, json=json, data=data
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -125,7 +132,9 @@ class AioHttpClient(AsyncHttpClient):
             release=resp.release,
         )
 
-    async def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
+    async def put(
+        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
+    ) -> HttpResponse:
         """
         Make a PUT request to the server.
 
@@ -140,7 +149,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        resp = await self.session.put(url, ssl=self._ssl_context(), headers=request_headers, json=json)
+        resp = await self.session.put(
+            url, ssl=self._ssl_context(), headers=request_headers, json=json
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -164,7 +175,9 @@ class AioHttpClient(AsyncHttpClient):
 
         request_headers = self._default_headers()
 
-        resp = await self.session.patch(url, ssl=self._ssl_context(), headers=request_headers, json=json)
+        resp = await self.session.patch(
+            url, ssl=self._ssl_context(), headers=request_headers, json=json
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -188,7 +201,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        resp = await self.session.delete(url, ssl=self._ssl_context(), headers=request_headers)
+        resp = await self.session.delete(
+            url, ssl=self._ssl_context(), headers=request_headers
+        )
 
         return HttpResponse(
             status_code=resp.status,

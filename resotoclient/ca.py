@@ -1,18 +1,19 @@
 from cryptography.x509.base import Certificate
 from cryptography import x509
 import warnings
-import requests
+import aiohttp
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
 from resotoclient.jwt_utils import decode_jwt_from_headers
+from resotoclient.http_client.event_loop_thread import EventLoopThread
 from jwt.exceptions import InvalidSignatureError
 import logging
 from logging import Logger
 import certifi
 import os
-from typing import Optional
+from typing import Optional, Mapping, Tuple
 import tempfile
 import time
 from datetime import timedelta, datetime
@@ -35,14 +36,29 @@ def cert_fingerprint(cert: Certificate, hash_algorithm: str = "SHA256") -> str:
     )
 
 
+# yep, this is an expensive call to make. But we only call it when the certificate
+# needs to be refreshed, which is not happening often, so it is fine here.
 def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
+    def get_bytes_and_headers() -> Tuple[bytes, Mapping[str, str]]:
+        async def do_request() -> Tuple[bytes, Mapping[str, str]]:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(f"{resotocore_uri}/ca/cert", ssl=False) as response:
+                    return await response.read(), response.headers
+
+        thread = EventLoopThread()
+        thread.start()
+        while not thread.running:
+            time.sleep(0.05)
+        body, headers = thread.run_coroutine(do_request())
+        thread.stop()
+        return body, headers
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        r = requests.get(f"{resotocore_uri}/ca/cert", verify=False)
-        ca_cert = load_cert_from_bytes(r.content)
+        content, headers = get_bytes_and_headers()
+        ca_cert = load_cert_from_bytes(content)
         if psk:
-            jwt = decode_jwt_from_headers(dict(r.headers), psk)
+            jwt = decode_jwt_from_headers(dict(headers), psk)
             if jwt is None:
                 raise NoJWTError("Failed to decode JWT")
             if jwt["sha256_fingerprint"] != cert_fingerprint(ca_cert):

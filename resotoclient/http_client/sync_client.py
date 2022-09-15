@@ -61,7 +61,9 @@ class SyncHttpClient:
         while not self.event_loop_thread.running:
             time.sleep(0.1)
         client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
-        self.async_client = AioHttpClient(self.url, self.psk, self.session_id, self.get_ca_cert_path, client_session)
+        self.async_client = AioHttpClient(
+            self.url, self.psk, self.session_id, self.get_ca_cert_path, client_session
+        )
 
     def stop(self):
         if self.async_client:
@@ -83,8 +85,12 @@ class SyncHttpClient:
         stream: bool = False,
     ) -> HttpResponse:
         if not self.async_client:
-            raise Exception("EventLoop thread is not running. Call start() before using the client.")
-        resp = self.event_loop_thread.run_coroutine(self.async_client.get(path, params, headers, stream))
+            raise Exception(
+                "EventLoop thread is not running. Call start() before using the client."
+            )
+        resp = self.event_loop_thread.run_coroutine(
+            self.async_client.get(path, params, headers, stream)
+        )
 
         return HttpResponse(
             status_code=resp.status_code,
@@ -105,8 +111,12 @@ class SyncHttpClient:
         stream: bool = False,
     ) -> HttpResponse:
         if not self.async_client:
-            raise Exception("EventLoop thread is not running. Call start() before using the client.")
-        resp = self.event_loop_thread.run_coroutine(self.async_client.post(path, json, data, params, headers, stream))
+            raise Exception(
+                "EventLoop thread is not running. Call start() before using the client."
+            )
+        resp = self.event_loop_thread.run_coroutine(
+            self.async_client.post(path, json, data, params, headers, stream)
+        )
         return HttpResponse(
             status_code=resp.status_code,
             headers=resp.headers,
@@ -116,10 +126,16 @@ class SyncHttpClient:
             release=resp.release,
         )
 
-    def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
+    def put(
+        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
+    ) -> HttpResponse:
         if not self.async_client:
-            raise Exception("EventLoop thread is not running. Call start() before using the client.")
-        resp = self.event_loop_thread.run_coroutine(self.async_client.put(path, json, params))
+            raise Exception(
+                "EventLoop thread is not running. Call start() before using the client."
+            )
+        resp = self.event_loop_thread.run_coroutine(
+            self.async_client.put(path, json, params)
+        )
         return HttpResponse(
             status_code=resp.status_code,
             headers=resp.headers,
@@ -131,7 +147,9 @@ class SyncHttpClient:
 
     def patch(self, path: str, json: JsValue) -> HttpResponse:
         if not self.async_client:
-            raise Exception("EventLoop thread is not running. Call start() before using the client.")
+            raise Exception(
+                "EventLoop thread is not running. Call start() before using the client."
+            )
         resp = self.event_loop_thread.run_coroutine(self.async_client.patch(path, json))
         return HttpResponse(
             status_code=resp.status_code,
@@ -144,8 +162,12 @@ class SyncHttpClient:
 
     def delete(self, path: str, params: Optional[Dict[str, str]]) -> HttpResponse:
         if not self.async_client:
-            raise Exception("EventLoop thread is not running. Call start() before using the client.")
-        resp = self.event_loop_thread.run_coroutine(self.async_client.delete(path, params))
+            raise Exception(
+                "EventLoop thread is not running. Call start() before using the client."
+            )
+        resp = self.event_loop_thread.run_coroutine(
+            self.async_client.delete(path, params)
+        )
         return HttpResponse(
             status_code=resp.status_code,
             headers=resp.headers,

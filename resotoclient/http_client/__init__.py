@@ -57,7 +57,9 @@ class AsyncHttpClient(ABC):
         pass
 
     @abstractmethod
-    async def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
+    async def put(
+        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
+    ) -> HttpResponse:
         pass
 
     @abstractmethod
