@@ -1,10 +1,10 @@
 from contextlib import suppress
-from typing import List, Iterator
+from typing import List, AsyncIterator
 
 import pytest
-from _pytest.fixtures import fixture
+from pytest import fixture
 
-import requests
+from aiohttp import ClientSession 
 import time
 
 # noinspection PyUnresolvedReferences
@@ -33,12 +33,17 @@ def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
 
 
 @fixture
-def core_client(foo_kinds: List[rc.Kind]) -> Iterator[ResotoClient]:
+async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[ResotoClient]:
     """
     Note: adding this fixture to a test: a complete resotocore process is started.
           The fixture ensures that the underlying process has entered the ready state.
           It also ensures to clean up the process, when the test is done.
     """
+
+    async def core_ready() -> bool:
+        async with ClientSession() as session:
+            async with session.get("http://localhost:5000/api/v1/ready", ssl=False) as resp:
+                return True
 
     # test_db.collection("model").truncate()
     # to_insert = [{"_key": elem.fqn, **to_js(elem)} for elem in foo_kinds]
@@ -50,8 +55,7 @@ def core_client(foo_kinds: List[rc.Kind]) -> Iterator[ResotoClient]:
     while not ready:
         time.sleep(0.5)
         try:
-            requests.get("https://localhost:8900/system/ready", verify=False)
-            ready = True
+            ready = await core_ready()
         except Exception:
             count -= 1
             if count == 0:

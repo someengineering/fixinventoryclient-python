@@ -36,7 +36,6 @@ Changelog = "https://github.com/someengineering/resotoclient-python/releases"
 [tool.poetry.dependencies]
 python = "^3.8"
 jsons="^1.6.1"
-requests="^2.27.1"
 PyJWT="^2.3.0"
 cryptography=">=36.0.2"
 requests-toolbelt = "^0.9.1"
@@ -60,6 +59,7 @@ networkx = "^2.8"
 
 [tool.poetry.group.dev.dependencies]
 pytest-aiohttp = "^1.0.4"
+pytest-asyncio = "^0.19.0"
 
 [tool.pyright]
 include = ["resotoclient", "tests"]

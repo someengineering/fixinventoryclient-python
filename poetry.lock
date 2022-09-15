@@ -752,7 +752,7 @@ extras = ["pandas", "graphviz"]
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "19af8df8b1d3386abba9a163724c753852ccc31a01416128c9edda3f12ea474a"
+content-hash = "9280b8f40451e9ed619de4c5b8d89d816e82ea7ef9fe6b9e7bb563edbf9844c0"
 
 [metadata.files]
 aiohttp = [
