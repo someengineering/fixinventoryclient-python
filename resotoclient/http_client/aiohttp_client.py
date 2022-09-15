@@ -14,19 +14,19 @@ class AioHttpClient(AsyncHttpClient):
         url: str,
         psk: Optional[str],
         session_id: str,
-        get_ca_cert_path: Optional[Callable[[], str]] = None,
+        get_ssl_context: Optional[Callable[[], ssl.SSLContext]] = None,
         session: Optional[aiohttp.ClientSession] = None,
     ):
 
         self.session = session if session else aiohttp.ClientSession()
         self.url = url
         self.psk = psk
-        self.get_ca_cert_path = get_ca_cert_path
+        self.get_ssl_context = get_ssl_context
         self.session_id = session_id
 
     def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
-        if self.get_ca_cert_path:
-            return ssl.create_default_context(cafile=self.get_ca_cert_path())
+        if self.get_ssl_context:
+            return self.get_ssl_context()
         else:
             return False
 

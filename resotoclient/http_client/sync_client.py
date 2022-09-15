@@ -4,7 +4,7 @@ from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator, A
 from resotoclient.models import JsValue
 import aiohttp
 from attrs import define
-
+from ssl import SSLContext
 
 @define
 class HttpResponse:
@@ -42,12 +42,12 @@ class SyncHttpClient:
         url: str,
         psk: Optional[str],
         session_id: str,
-        get_ca_cert_path: Optional[Callable[[], str]] = None,
+        get_ssl_context: Optional[Callable[[], SSLContext]] = None,
     ):
         self.event_loop_thread = EventLoopThread()
         self.url = url
         self.psk = psk
-        self.get_ca_cert_path = get_ca_cert_path
+        self.get_ssl_context = get_ssl_context
         self.session_id = session_id
         self.async_client = None
 
@@ -62,7 +62,7 @@ class SyncHttpClient:
             time.sleep(0.1)
         client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
         self.async_client = AioHttpClient(
-            self.url, self.psk, self.session_id, self.get_ca_cert_path, client_session
+            self.url, self.psk, self.session_id, self.get_ssl_context, client_session
         )
 
     def stop(self):

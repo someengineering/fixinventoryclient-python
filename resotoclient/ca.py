@@ -19,7 +19,7 @@ import time
 from datetime import timedelta, datetime
 from tempfile import TemporaryDirectory
 from threading import Lock, Thread, Condition, Event
-
+from ssl import SSLContext, create_default_context
 
 def load_cert_from_bytes(cert: bytes) -> Certificate:
     return x509.load_pem_x509_certificate(cert, default_backend())
@@ -201,6 +201,11 @@ class CertificatesHolder:
         if not os.path.isfile(self.__ca_cert_path):
             self.load()
         return self.__ca_cert_path
+
+    def ssl_context(self) -> SSLContext:
+        context = create_default_context()
+        context.load_verify_locations(cafile=self.ca_cert_path())
+        return context
 
     def __certificates_watcher(self) -> None:
         while True:

@@ -78,7 +78,7 @@ class ResotoClient:
             renew_before=renew_before,
         )
         self.sync_client = SyncHttpClient(
-            url, psk, rnd_str(), self.holder.ca_cert_path if verify else None
+            url, psk, rnd_str(), self.holder.ssl_context if verify else None
         )
 
     def __enter__(self) -> "ResotoClient":
