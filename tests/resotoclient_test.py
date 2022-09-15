@@ -42,7 +42,7 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[ResotoClient]:
 
     async def core_ready() -> bool:
         async with ClientSession() as session:
-            async with session.get("http://localhost:5000/api/v1/ready", ssl=False) as resp:
+            async with session.get("http://localhost:5000/api/v1/ready", ssl=False):
                 return True
 
     # test_db.collection("model").truncate()
