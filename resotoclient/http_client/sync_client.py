@@ -1,6 +1,6 @@
 from resotoclient.http_client.event_loop_thread import EventLoopThread
 from resotoclient.http_client.aiohttp_client import AioHttpClient
-from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator, Any
+from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator, Any, Awaitable
 from resotoclient.models import JsValue
 import aiohttp
 from attrs import define
@@ -42,7 +42,7 @@ class SyncHttpClient:
         url: str,
         psk: Optional[str],
         session_id: str,
-        get_ssl_context: Optional[Callable[[], SSLContext]] = None,
+        get_ssl_context: Optional[Callable[[], Awaitable[SSLContext]]] = None,
     ):
         self.event_loop_thread = EventLoopThread()
         self.url = url

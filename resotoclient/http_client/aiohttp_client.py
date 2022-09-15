@@ -1,6 +1,6 @@
 from resotoclient.http_client import AsyncHttpClient
 from resotoclient.http_client import HttpResponse
-from typing import Dict, Optional, Callable, Union, AsyncIterator
+from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable
 from resotoclient.models import JsValue
 from resotoclient.jwt_utils import encode_jwt_to_headers
 import aiohttp
@@ -14,7 +14,7 @@ class AioHttpClient(AsyncHttpClient):
         url: str,
         psk: Optional[str],
         session_id: str,
-        get_ssl_context: Optional[Callable[[], ssl.SSLContext]] = None,
+        get_ssl_context: Optional[Callable[[], Awaitable[ssl.SSLContext]]] = None,
         session: Optional[aiohttp.ClientSession] = None,
     ):
 
@@ -24,9 +24,9 @@ class AioHttpClient(AsyncHttpClient):
         self.get_ssl_context = get_ssl_context
         self.session_id = session_id
 
-    def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
+    async def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
         if self.get_ssl_context:
-            return self.get_ssl_context()
+            return await self.get_ssl_context()
         else:
             return False
 
@@ -76,7 +76,7 @@ class AioHttpClient(AsyncHttpClient):
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
         resp = await self.session.get(
-            url, ssl=self._ssl_context(), headers=request_headers
+            url, ssl=await self._ssl_context(), headers=request_headers
         )
 
         return HttpResponse(
@@ -120,7 +120,7 @@ class AioHttpClient(AsyncHttpClient):
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
         resp = await self.session.post(
-            url, ssl=self._ssl_context(), headers=request_headers, json=json, data=data
+            url, ssl=await self._ssl_context(), headers=request_headers, json=json, data=data
         )
 
         return HttpResponse(
@@ -150,7 +150,7 @@ class AioHttpClient(AsyncHttpClient):
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
         resp = await self.session.put(
-            url, ssl=self._ssl_context(), headers=request_headers, json=json
+            url, ssl=await self._ssl_context(), headers=request_headers, json=json
         )
 
         return HttpResponse(
@@ -176,7 +176,7 @@ class AioHttpClient(AsyncHttpClient):
         request_headers = self._default_headers()
 
         resp = await self.session.patch(
-            url, ssl=self._ssl_context(), headers=request_headers, json=json
+            url, ssl= await self._ssl_context(), headers=request_headers, json=json
         )
 
         return HttpResponse(
@@ -202,7 +202,7 @@ class AioHttpClient(AsyncHttpClient):
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
         resp = await self.session.delete(
-            url, ssl=self._ssl_context(), headers=request_headers
+            url, ssl= await self._ssl_context(), headers=request_headers
         )
 
         return HttpResponse(

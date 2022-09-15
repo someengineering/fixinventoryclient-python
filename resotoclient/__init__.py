@@ -93,8 +93,9 @@ class ResotoClient:
         self.shutdown()
 
     def start(self) -> None:
-        self.holder.start()
         self.sync_client.start()
+        self.sync_client.event_loop_thread.run_coroutine(self.holder.start())
+
 
     def shutdown(self) -> None:
         self.holder.shutdown()

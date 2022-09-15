@@ -6,12 +6,11 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from resotoclient.jwt_utils import decode_jwt_from_headers
-from resotoclient.http_client.event_loop_thread import EventLoopThread
 from jwt.exceptions import InvalidSignatureError
 import logging
 from logging import Logger
 from typing import Optional, Mapping, Tuple
-import time
+import asyncio
 from datetime import timedelta, datetime
 from threading import Lock, Thread, Condition, Event
 from ssl import SSLContext, create_default_context, Purpose
@@ -33,24 +32,16 @@ def cert_fingerprint(cert: Certificate, hash_algorithm: str = "SHA256") -> str:
 
 # yep, this is an expensive call to make. But we only call it when the certificate
 # needs to be refreshed, which is not happening often, so it is fine here.
-def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
-    def get_bytes_and_headers() -> Tuple[bytes, Mapping[str, str]]:
-        async def do_request() -> Tuple[bytes, Mapping[str, str]]:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(f"{resotocore_uri}/ca/cert", ssl=False) as response:
-                    return await response.read(), response.headers
+async def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
+    async def do_request() -> Tuple[bytes, Mapping[str, str]]:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(f"{resotocore_uri}/ca/cert", ssl=False) as response:
+                return await response.read(), response.headers
 
-        thread = EventLoopThread()
-        thread.start()
-        while not thread.running:
-            time.sleep(0.05)
-        body, headers = thread.run_coroutine(do_request())
-        thread.stop()
-        return body, headers
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        content, headers = get_bytes_and_headers()
+        content, headers = await do_request()
         ca_cert = load_cert_from_bytes(content)
         if psk:
             jwt = decode_jwt_from_headers(dict(headers), psk)
@@ -65,12 +56,12 @@ def cert_to_bytes(cert: Certificate) -> bytes:
     return cert.public_bytes(serialization.Encoding.PEM)
 
 
-def load_cert_from_core(
+async def load_cert_from_core(
     resotocore_uri: str, psk: Optional[str], log: Logger
 ) -> Certificate:
     log.debug("Loading CA certificate from core")
     try:
-        ca_cert = get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
+        ca_cert = await get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
     except FingerprintError as e:
         log.fatal(f"{e}, MITM attack?")
         raise
@@ -115,8 +106,8 @@ class CertificatesHolder:
 
         self.log = logging.getLogger("resotoclient")
 
-    def start(self) -> None:
-        self.load()
+    async def start(self) -> None:
+        await self.load()
         if not self.__watcher.is_alive():
             self.__watcher.start()
 
@@ -124,9 +115,9 @@ class CertificatesHolder:
         with self.__exit:
             self.__exit.notify()
 
-    def load(self) -> None:
+    async def load(self) -> None:
         with self.__load_lock:
-            self.__ca_cert = load_cert_from_core(
+            self.__ca_cert = await load_cert_from_core(
                 self.resotocore_url, self.psk, self.log
             )
             ctx = create_default_context(purpose=Purpose.SERVER_AUTH)
@@ -135,17 +126,17 @@ class CertificatesHolder:
             self.__ssl_context = ctx
             self.__loaded.set()
 
-    def reload(self) -> None:
+    async def reload(self) -> None:
         self.__loaded.clear()
-        self.load()
+        await self.load()
 
-    def ssl_context(self) -> SSLContext:
+    async def ssl_context(self) -> SSLContext:
         if not self.__ssl_context:
-            self.load()
+            await self.load()
         return self.__ssl_context # type: ignore
 
 
-    def __certificates_watcher(self) -> None:
+    async def __certificates_watcher(self) -> None:
         while True:
             with self.__exit:
                 if self.__loaded.is_set():
@@ -155,6 +146,6 @@ class CertificatesHolder:
                         and cert.not_valid_after
                         < datetime.utcnow() - self.__renew_before
                     ):
-                        self.reload()
+                        asyncio.run(self.reload())
                 if self.__exit.wait(60):
                     break
