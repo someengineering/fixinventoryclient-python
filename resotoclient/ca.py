@@ -5,21 +5,16 @@ import aiohttp
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
-from cryptography.x509.oid import NameOID
 from resotoclient.jwt_utils import decode_jwt_from_headers
 from resotoclient.http_client.event_loop_thread import EventLoopThread
 from jwt.exceptions import InvalidSignatureError
 import logging
 from logging import Logger
-import certifi
-import os
 from typing import Optional, Mapping, Tuple
-import tempfile
 import time
 from datetime import timedelta, datetime
-from tempfile import TemporaryDirectory
 from threading import Lock, Thread, Condition, Event
-from ssl import SSLContext, create_default_context
+from ssl import SSLContext, create_default_context, Purpose
 
 def load_cert_from_bytes(cert: bytes) -> Certificate:
     return x509.load_pem_x509_certificate(cert, default_backend())
@@ -70,42 +65,8 @@ def cert_to_bytes(cert: Certificate) -> bytes:
     return cert.public_bytes(serialization.Encoding.PEM)
 
 
-def write_ca_bundle(
-    cert: Certificate, cert_path: str, include_certifi: bool = True, rename: bool = True
-) -> None:
-    tmp_cert_path = f"{cert_path}.tmp" if rename else cert_path
-    with open(tmp_cert_path, "wb") as f:
-        if include_certifi:
-            f.write(certifi.contents().encode())
-        f.write("\n".encode())
-        f.write(f"# Issuer: {cert.issuer.rfc4514_string()}\n".encode())
-        f.write(f"# Subject: {cert.subject.rfc4514_string()}\n".encode())
-        label = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
-        f.write(f"# Label: {label}\n".encode())
-        f.write(f"# Serial: {cert.serial_number}\n".encode())
-        md5 = cert_fingerprint(cert, "MD5")
-        sha1 = cert_fingerprint(cert, "SHA1")
-        sha256 = cert_fingerprint(cert, "SHA256")
-        f.write(f"# MD5 Fingerprint: {md5}\n".encode())
-        f.write(f"# SHA1 Fingerprint: {sha1}\n".encode())
-        f.write(f"# SHA256 Fingerprint: {sha256}\n".encode())
-        f.write(cert_to_bytes(cert))
-    if rename:
-        os.rename(tmp_cert_path, cert_path)
-
-
-def load_ca_cert(resotocore_uri: str, psk: Optional[str]) -> str:
-    logging.debug("Loading CA cert from core")
-    _, filename = tempfile.mkstemp()
-
-    ca_cert = get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
-    logging.debug(f"Writing CA cert {filename}")
-    write_ca_bundle(ca_cert, filename, include_certifi=True)
-    return filename
-
-
 def load_cert_from_core(
-    ca_cert_path: str, resotocore_uri: str, psk: Optional[str], log: Logger
+    resotocore_uri: str, psk: Optional[str], log: Logger
 ) -> Certificate:
     log.debug("Loading CA certificate from core")
     try:
@@ -122,21 +83,7 @@ def load_cert_from_core(
     except Exception as e:
         log.fatal(f"{e}")
         raise
-    log.debug(f"Writing CA cert {ca_cert_path}")
-    write_ca_bundle(ca_cert, ca_cert_path, include_certifi=True)
     return ca_cert
-
-
-def refresh_cert_on_disk(
-    ca_cert_path: str, ca_cert: Certificate, log: Logger, refresh_every_sec: int = 10800
-) -> None:
-    try:
-        last_ca_cert_update = time.time() - os.path.getmtime(ca_cert_path)
-        if last_ca_cert_update > refresh_every_sec:
-            log.debug("Refreshing cert/key files on disk")
-            write_ca_bundle(ca_cert, ca_cert_path, include_certifi=True)
-    except FileNotFoundError:
-        pass
 
 
 class FingerprintError(Exception):
@@ -152,15 +99,12 @@ class CertificatesHolder:
         self,
         resotocore_url: str,
         psk: Optional[str],
-        custom_ca_cert_path: Optional[str],
         renew_before: timedelta,
     ) -> None:
         self.resotocore_url = resotocore_url
         self.psk = psk
-        self.__custom_ca_cert_path = custom_ca_cert_path
         self.__ca_cert = None
-        self.__tempdir = TemporaryDirectory(prefix="resoto-cert-")
-        self.__ca_cert_path = f"{self.__tempdir.name}/ca.crt"
+        self.__ssl_context = None
         self.__renew_before = renew_before
         self.__watcher = Thread(
             target=self.__certificates_watcher, name="certificates_watcher"
@@ -182,30 +126,24 @@ class CertificatesHolder:
 
     def load(self) -> None:
         with self.__load_lock:
-            if self.__custom_ca_cert_path is not None:
-                self.log.debug(
-                    f"Loading CA certificate from {self.__custom_ca_cert_path}"
-                )
-                self.__ca_cert = load_cert_from_file(self.__custom_ca_cert_path)
-            else:
-                self.__ca_cert = load_cert_from_core(
-                    self.__ca_cert_path, self.resotocore_url, self.psk, self.log
-                )
+            self.__ca_cert = load_cert_from_core(
+                self.resotocore_url, self.psk, self.log
+            )
+            ctx = create_default_context(purpose=Purpose.SERVER_AUTH)
+            ca_bytes = cert_to_bytes(self.__ca_cert).decode("utf-8")
+            ctx.load_verify_locations(cadata=ca_bytes)
+            self.__ssl_context = ctx
             self.__loaded.set()
 
     def reload(self) -> None:
         self.__loaded.clear()
         self.load()
 
-    def ca_cert_path(self) -> str:
-        if not os.path.isfile(self.__ca_cert_path):
-            self.load()
-        return self.__ca_cert_path
-
     def ssl_context(self) -> SSLContext:
-        context = create_default_context()
-        context.load_verify_locations(cafile=self.ca_cert_path())
-        return context
+        if not self.__ssl_context:
+            self.load()
+        return self.__ssl_context # type: ignore
+
 
     def __certificates_watcher(self) -> None:
         while True:
@@ -218,15 +156,5 @@ class CertificatesHolder:
                         < datetime.utcnow() - self.__renew_before
                     ):
                         self.reload()
-                    self.__refresh_files_on_disk()
                 if self.__exit.wait(60):
                     break
-
-    def __refresh_files_on_disk(self) -> None:
-        if not self.__loaded.is_set():
-            return
-        if self.__ca_cert is None:
-            return
-        refresh_cert_on_disk(
-            ca_cert_path=self.__ca_cert_path, ca_cert=self.__ca_cert, log=self.log
-        )

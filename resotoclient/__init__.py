@@ -74,7 +74,6 @@ class ResotoClient:
         self.holder = CertificatesHolder(
             resotocore_url=url,
             psk=psk,
-            custom_ca_cert_path=custom_ca_cert_path,
             renew_before=renew_before,
         )
         self.sync_client = SyncHttpClient(
