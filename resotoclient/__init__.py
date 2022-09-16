@@ -117,8 +117,7 @@ class ResotoClient:
         headers: Optional[Dict[str, str]] = None,
         stream: bool = False,
     ) -> HttpResponse:
-        if not self.sync_client.running():
-            self.sync_client.start()
+        self.sync_client.ensure_running()
         return self.sync_client.get(path, params, headers, stream)
 
     def _post(
@@ -130,27 +129,23 @@ class ResotoClient:
         headers: Optional[Dict[str, str]] = None,
         stream: bool = False,
     ) -> HttpResponse:
-        if not self.sync_client.running():
-            self.sync_client.start()
+        self.sync_client.ensure_running()
         return self.sync_client.post(path, json, data, params, headers, stream)
 
     def _put(
         self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
     ) -> HttpResponse:
-        if not self.sync_client.running():
-            self.sync_client.start()
+        self.sync_client.ensure_running()
         return self.sync_client.put(path, json, params)
 
     def _patch(self, path: str, json: JsValue) -> HttpResponse:
-        if not self.sync_client.running():
-            self.sync_client.start()
+        self.sync_client.ensure_running()
         return self.sync_client.patch(path, json)
 
     def _delete(
         self, path: str, params: Optional[Dict[str, str]] = None
     ) -> HttpResponse:
-        if not self.sync_client.running():
-            self.sync_client.start()
+        self.sync_client.ensure_running()
         return self.sync_client.delete(path, params)
 
     def model(self) -> Model:

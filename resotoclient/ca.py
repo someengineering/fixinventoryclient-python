@@ -5,6 +5,7 @@ import aiohttp
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
+from cryptography.x509.oid import NameOID
 from resotoclient.jwt_utils import decode_jwt_from_headers
 from jwt.exceptions import InvalidSignatureError
 import logging
@@ -14,6 +15,8 @@ import asyncio
 from datetime import timedelta, datetime
 from threading import Lock, Thread, Condition, Event
 from ssl import SSLContext, create_default_context, Purpose
+import certifi
+from io import StringIO
 
 def load_cert_from_bytes(cert: bytes) -> Certificate:
     return x509.load_pem_x509_certificate(cert, default_backend())
@@ -55,6 +58,27 @@ async def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
 def cert_to_bytes(cert: Certificate) -> bytes:
     return cert.public_bytes(serialization.Encoding.PEM)
 
+
+def ca_bundle(
+    cert: Certificate, include_certifi: bool = True
+) -> str:
+    f = StringIO()
+    if include_certifi:
+        f.write(certifi.contents())
+    f.write("\n")
+    f.write(f"# Issuer: {cert.issuer.rfc4514_string()}\n")
+    f.write(f"# Subject: {cert.subject.rfc4514_string()}\n")
+    label = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
+    f.write(f"# Label: {label}\n")
+    f.write(f"# Serial: {cert.serial_number}\n")
+    md5 = cert_fingerprint(cert, "MD5")
+    sha1 = cert_fingerprint(cert, "SHA1")
+    sha256 = cert_fingerprint(cert, "SHA256")
+    f.write(f"# MD5 Fingerprint: {md5}\n")
+    f.write(f"# SHA1 Fingerprint: {sha1}\n")
+    f.write(f"# SHA256 Fingerprint: {sha256}\n")
+    f.write(cert_to_bytes(cert).decode("utf-8"))
+    return f.getvalue()
 
 async def load_cert_from_core(
     resotocore_uri: str, psk: Optional[str], log: Logger
@@ -121,8 +145,7 @@ class CertificatesHolder:
                 self.resotocore_url, self.psk, self.log
             )
             ctx = create_default_context(purpose=Purpose.SERVER_AUTH)
-            ca_bytes = cert_to_bytes(self.__ca_cert).decode("utf-8")
-            ctx.load_verify_locations(cadata=ca_bytes)
+            ctx.load_verify_locations(cadata=ca_bundle(self.__ca_cert))
             self.__ssl_context = ctx
             self.__loaded.set()
 

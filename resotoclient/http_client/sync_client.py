@@ -45,6 +45,7 @@ class SyncHttpClient:
         get_ssl_context: Optional[Callable[[], Awaitable[SSLContext]]] = None,
     ):
         self.event_loop_thread = EventLoopThread()
+        self.event_loop_thread.daemon = True
         self.url = url
         self.psk = psk
         self.get_ssl_context = get_ssl_context
@@ -53,6 +54,10 @@ class SyncHttpClient:
 
     def running(self) -> bool:
         return self.async_client is not None
+
+    def ensure_running(self):
+        if not self.running():
+            self.start()
 
     def start(self):
         self.event_loop_thread.start()
