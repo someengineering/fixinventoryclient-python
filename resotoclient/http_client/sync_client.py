@@ -5,6 +5,7 @@ from resotoclient.models import JsValue
 import aiohttp
 from attrs import define
 from ssl import SSLContext
+import atexit
 
 @define
 class HttpResponse:
@@ -46,6 +47,7 @@ class SyncHttpClient:
     ):
         self.event_loop_thread = EventLoopThread()
         self.event_loop_thread.daemon = True
+        atexit.register(self.stop)
         self.url = url
         self.psk = psk
         self.get_ssl_context = get_ssl_context
