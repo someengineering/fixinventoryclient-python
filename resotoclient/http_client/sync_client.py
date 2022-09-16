@@ -53,15 +53,15 @@ class SyncHttpClient:
         self.get_ssl_context = get_ssl_context
         self.session_id = session_id
         self.async_client = None
+        self.running = False
 
-    def running(self) -> bool:
-        return self.async_client is not None
 
     def ensure_running(self):
-        if not self.running():
+        if not self.running:
             self.start()
 
     def start(self):
+        assert not self.running
         self.event_loop_thread.start()
         import time
 
@@ -71,11 +71,15 @@ class SyncHttpClient:
         self.async_client = AioHttpClient(
             self.url, self.psk, self.session_id, self.get_ssl_context, client_session
         )
+        self.running = True
 
     def stop(self):
+        if not self.running:
+            return
         if self.async_client:
             self.event_loop_thread.run_coroutine(self.async_client.session.close())
         self.event_loop_thread.stop()
+        self.running = False
 
     def _asynciter_to_iter(self, async_iter: AsyncIterator[bytes]) -> Iterator[bytes]:
         while True:
