@@ -6,6 +6,7 @@ import aiohttp
 from attrs import define
 from ssl import SSLContext
 import atexit
+import threading
 
 @define
 class HttpResponse:
@@ -54,6 +55,7 @@ class SyncHttpClient:
         self.session_id = session_id
         self.async_client = None
         self.running = False
+        self.state_lock = threading.Lock()
 
 
     def ensure_running(self):
@@ -61,25 +63,30 @@ class SyncHttpClient:
             self.start()
 
     def start(self):
-        assert not self.running
-        self.event_loop_thread.start()
-        import time
+        with self.state_lock:
+            if self.running:
+                return
 
-        while not self.event_loop_thread.running:
-            time.sleep(0.1)
-        client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
-        self.async_client = AioHttpClient(
-            self.url, self.psk, self.session_id, self.get_ssl_context, client_session
-        )
-        self.running = True
+            self.event_loop_thread.start()
+            import time
+
+            while not self.event_loop_thread.running:
+                time.sleep(0.1)
+            client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
+            self.async_client = AioHttpClient(
+                self.url, self.psk, self.session_id, self.get_ssl_context, client_session
+            )
+            self.running = True
 
     def stop(self):
-        if not self.running:
-            return
-        if self.async_client:
-            self.event_loop_thread.run_coroutine(self.async_client.session.close())
-        self.event_loop_thread.stop()
-        self.running = False
+        with self.state_lock:
+            if not self.running:
+                return
+                
+            if self.async_client:
+                self.event_loop_thread.run_coroutine(self.async_client.session.close())
+            self.event_loop_thread.stop()
+            self.running = False
 
     def _asynciter_to_iter(self, async_iter: AsyncIterator[bytes]) -> Iterator[bytes]:
         while True:
