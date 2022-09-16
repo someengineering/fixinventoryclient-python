@@ -7,6 +7,7 @@ from attrs import define
 from ssl import SSLContext
 import atexit
 import threading
+from enum import Enum
 
 @define
 class HttpResponse:
@@ -29,6 +30,10 @@ class HttpResponse:
     iter_lines: Callable[[], Iterator[bytes]]
     release: Callable[[], None]
 
+class ClientState(Enum):
+    INITIALIZED = 0
+    STARTED = 1
+    STOPPED = 2
 
 class SyncHttpClient:
     """
@@ -54,17 +59,18 @@ class SyncHttpClient:
         self.get_ssl_context = get_ssl_context
         self.session_id = session_id
         self.async_client = None
-        self.running = False
+        self.client_state: ClientState = ClientState.INITIALIZED
         self.state_lock = threading.Lock()
 
-
+    # a cheap check to see if the client is running
+    # without invoking the state lock
     def ensure_running(self):
-        if not self.running:
+        if self.client_state == ClientState.INITIALIZED:
             self.start()
 
     def start(self):
         with self.state_lock:
-            if self.running:
+            if self.client_state != ClientState.INITIALIZED:
                 return
 
             self.event_loop_thread.start()
@@ -76,17 +82,17 @@ class SyncHttpClient:
             self.async_client = AioHttpClient(
                 self.url, self.psk, self.session_id, self.get_ssl_context, client_session
             )
-            self.running = True
+            self.client_state = ClientState.STARTED
 
     def stop(self):
         with self.state_lock:
-            if not self.running:
+            if self.client_state != ClientState.STARTED:
                 return
-                
+
             if self.async_client:
                 self.event_loop_thread.run_coroutine(self.async_client.session.close())
             self.event_loop_thread.stop()
-            self.running = False
+            self.client_state = ClientState.STOPPED
 
     def _asynciter_to_iter(self, async_iter: AsyncIterator[bytes]) -> Iterator[bytes]:
         while True:
