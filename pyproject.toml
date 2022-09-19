@@ -36,12 +36,12 @@ Changelog = "https://github.com/someengineering/resotoclient-python/releases"
 [tool.poetry.dependencies]
 python = "^3.8"
 jsons="^1.6.1"
-requests="^2.27.1"
 PyJWT="^2.3.0"
 cryptography=">=36.0.2"
 requests-toolbelt = "^0.9.1"
 pandas = { version = "^1.4.2", optional = true }
 graphviz = { version = "^0.20", optional = true }
+aiohttp = "^3.8.1"
 
 [tool.poetry.extras]
 extras = ["pandas", "graphviz"]
@@ -56,6 +56,9 @@ flake8-bandit = "^2.1.2"
 flake8-bugbear = "^21.9.2"
 pep8-naming = "^0.12.1"
 networkx = "^2.8"
+
+[tool.poetry.group.dev.dependencies]
+pytest-asyncio = "^0.19.0"
 
 [tool.pyright]
 include = ["resotoclient", "tests"]

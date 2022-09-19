@@ -45,5 +45,5 @@ def pytest(session: Session) -> None:
     """Test using pytest"""
     args = session.posargs or ["tests"]
     session.install(".")
-    session.install("pytest", "networkx")
+    session.install("pytest", "networkx", "pytest-asyncio")
     session.run("pytest", *args)
