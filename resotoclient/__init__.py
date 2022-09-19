@@ -8,6 +8,7 @@ from typing import (
     List,
     Tuple,
     Sequence,
+    Mapping,
     Type,
     AsyncIterator,
     TypeVar, 
@@ -28,7 +29,6 @@ from resotoclient.models import (
     Kind,
 )
 from resotoclient.async_client import ResotoClient as AsyncResotoClient
-from resotoclient.http_client.sync_client import HttpResponse
 from resotoclient.http_client.event_loop_thread import EventLoopThread
 from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
@@ -40,6 +40,7 @@ import sys
 from dataclasses import dataclass
 from enum import Enum
 from collections import defaultdict
+from attrs import define
 
 try:
     from pandas import DataFrame  # type: ignore
@@ -55,6 +56,27 @@ except ImportError:
 FilenameLookup = Dict[str, str]
 
 log: logging.Logger = logging.getLogger("resotoclient")
+
+@define
+class HttpResponse:
+    """
+    An abstraction of an HTTP response to hide the underlying HTTP client implementation.
+
+    Attributes:
+        status_code: The HTTP status code of the response.
+        headers: The HTTP headers of the response.
+        text: A function that returns response body as a string.
+        json: A function that returns response body as a JSON object.
+        iter_lines: A function that returns the iterator of the response body, present if streaming was requested in a async client.
+        release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
+    """
+
+    status_code: int
+    headers: Mapping[str, str]
+    text: Callable[[], str]
+    json: Callable[[], Any]
+    iter_lines: Callable[[], Iterator[bytes]]
+    release: Callable[[], None]
 
 
 class ClientState(Enum):
