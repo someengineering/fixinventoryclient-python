@@ -6,7 +6,7 @@ from resotoclient.jwt_utils import encode_jwt_to_headers
 import aiohttp
 import ssl
 from yarl import URL
-
+from asyncio import AbstractEventLoop
 
 class AioHttpClient(AsyncHttpClient):
     def __init__(
@@ -15,10 +15,10 @@ class AioHttpClient(AsyncHttpClient):
         psk: Optional[str],
         session_id: str,
         get_ssl_context: Optional[Callable[[], Awaitable[ssl.SSLContext]]] = None,
-        session: Optional[aiohttp.ClientSession] = None,
+        loop: Optional[AbstractEventLoop] = None,
     ):
 
-        self.session = session if session else aiohttp.ClientSession()
+        self.session = aiohttp.ClientSession(loop=loop)
         self.url = url
         self.psk = psk
         self.get_ssl_context = get_ssl_context

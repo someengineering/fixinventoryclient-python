@@ -2,7 +2,6 @@ from resotoclient.http_client.event_loop_thread import EventLoopThread
 from resotoclient.http_client.aiohttp_client import AioHttpClient
 from typing import Dict, Optional, Callable, Mapping, Iterator, AsyncIterator, Any, Awaitable
 from resotoclient.models import JsValue
-import aiohttp
 from attrs import define
 from ssl import SSLContext
 import atexit
@@ -78,9 +77,8 @@ class SyncHttpClient:
 
             while not self.event_loop_thread.running:
                 time.sleep(0.1)
-            client_session = aiohttp.ClientSession(loop=self.event_loop_thread.loop)
             self.async_client = AioHttpClient(
-                self.url, self.psk, self.session_id, self.get_ssl_context, client_session
+                self.url, self.psk, self.session_id, self.get_ssl_context, self.event_loop_thread.loop
             )
             self.client_state = ClientState.STARTED
 
