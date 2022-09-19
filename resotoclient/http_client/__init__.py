@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping
+from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping, Any
 from attrs import define
-from resotoclient.models import JsValue, JsObject
+from resotoclient.models import JsValue
 
 
 @define
@@ -21,7 +21,7 @@ class HttpResponse:
     status_code: int
     headers: Mapping[str, str]
     text: Callable[[], Awaitable[str]]
-    json: Callable[[], Awaitable[JsObject]]
+    json: Callable[[], Awaitable[Any]]
     async_iter_lines: Callable[[], AsyncIterator[bytes]]
     release: Callable[[], None]
 

@@ -30,6 +30,9 @@ class AioHttpClient(AsyncHttpClient):
         else:
             return False
 
+    async def close(self) -> None:
+        await self.session.close()
+
     def _default_query_params(self) -> Dict[str, str]:
         return {"session_id": self.session_id}
 
