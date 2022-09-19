@@ -32,7 +32,7 @@ from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import timedelta
-
+from asyncio import AbstractEventLoop
 
 FilenameLookup = Dict[str, str]
 
@@ -50,6 +50,7 @@ class ResotoClient:
         psk: Optional[str],
         verify: bool = True,
         renew_before: timedelta = timedelta(days=1),
+        loop: Optional[AbstractEventLoop]=None,
     ):
         self.resotocore_url = url
         self.psk = psk
@@ -61,7 +62,7 @@ class ResotoClient:
             renew_before=renew_before,
         )
         self.http_client = AioHttpClient(
-            url, psk, rnd_str(), self.holder.ssl_context if verify else None
+            url=url, psk=psk, session_id=self.session_id, get_ssl_context=self.holder.ssl_context if verify else None, loop=loop 
         )
 
     async def __aenter__(self) -> "ResotoClient":
@@ -496,9 +497,9 @@ class ResotoClient:
         if response.status_code == 200:
             content_type = response.headers.get("Content-Type")
             if content_type == "text/plain":
-                return iter([await response.text()])
+                yield await response.text()
             elif content_type == "application/json":
-                return iter([await response.json()])
+                yield await response.json()
             elif content_type == "application/x-ndjson":
                 async for line in response.async_iter_lines():
                     yield json_loadb(line)
