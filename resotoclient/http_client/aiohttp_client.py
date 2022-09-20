@@ -50,8 +50,9 @@ class AioHttpClient(AsyncHttpClient):
 
     async def lines(self, response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
         async for line in response.content:
-            # strip the newline as it was done in the old http client
-            yield line.rstrip()
+            # aiohttp keeps the newline separator when iterating over the content
+            # we should strip the newline as it was done in the old http client
+            yield line.rstrip(b"\n")
 
     async def get(
         self,
