@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping
+from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping, Any, Type
 from attrs import define
-from resotoclient.models import JsValue, JsObject
-
+from resotoclient.models import JsValue
+from types import TracebackType
 
 @define
 class HttpResponse:
@@ -14,6 +14,7 @@ class HttpResponse:
         headers: The HTTP headers of the response.
         text: A function that returns response body as a string.
         json: A function that returns response body as a JSON object.
+        payload_bytes: A function that returns response body as a byte array.
         async_iter_lines: A function that returns the async iterator of the response body, present if streaming was requested in a async client.
         release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
     """
@@ -21,9 +22,21 @@ class HttpResponse:
     status_code: int
     headers: Mapping[str, str]
     text: Callable[[], Awaitable[str]]
-    json: Callable[[], Awaitable[JsObject]]
+    json: Callable[[], Awaitable[Any]]
+    payload_bytes: Callable[[], Awaitable[bytes]]
     async_iter_lines: Callable[[], AsyncIterator[bytes]]
     release: Callable[[], None]
+
+    def __enter__(self) -> "HttpResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.release()
 
 
 class AsyncHttpClient(ABC):

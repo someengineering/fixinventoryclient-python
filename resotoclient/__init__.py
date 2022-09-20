@@ -1,5 +1,4 @@
 import logging
-from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import (
     Any,
     Dict,
@@ -9,15 +8,17 @@ from typing import (
     List,
     Tuple,
     Sequence,
+    Mapping,
     Type,
+    AsyncIterator,
+    TypeVar, 
+    Awaitable,
+    Callable
 )
 from types import TracebackType
-from resotoclient.json_utils import json_load, json_loadb, json_dump
-from resotoclient.ca import CertificatesHolder
 from resotoclient.models import (
     Subscriber,
     Subscription,
-    ParsedCommand,
     ParsedCommands,
     GraphUpdate,
     EstimatedSearchCost,
@@ -27,16 +28,18 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from resotoclient.http_client.sync_client import SyncHttpClient, HttpResponse
-from requests_toolbelt import MultipartEncoder  # type: ignore
+from resotoclient.async_client import ResotoClient as AsyncResotoClient
+from resotoclient.http_client.event_loop_thread import EventLoopThread
 import random
 import string
 from datetime import timedelta
-
+import atexit
+import threading
 import sys
 from dataclasses import dataclass
 from enum import Enum
 from collections import defaultdict
+from attrs import define
 
 try:
     from pandas import DataFrame  # type: ignore
@@ -53,6 +56,47 @@ FilenameLookup = Dict[str, str]
 
 log: logging.Logger = logging.getLogger("resotoclient")
 
+@define
+class HttpResponse:
+    """
+    An abstraction of an HTTP response to hide the underlying HTTP client implementation.
+
+    Attributes:
+        status_code: The HTTP status code of the response.
+        headers: The HTTP headers of the response.
+        text: A function that returns response body as a string.
+        json: A function that returns response body as a JSON object.
+        payload_bytes: A function that returns response body as a byte array.
+        iter_lines: A function that returns the iterator of the response body, present if streaming was requested in a async client.
+        release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
+    """
+
+    status_code: int
+    headers: Mapping[str, str]
+    text: Callable[[], str]
+    json: Callable[[], Any]
+    payload_bytes: Callable[[], bytes]
+    iter_lines: Callable[[], Iterator[bytes]]
+    release: Callable[[], None]
+
+    def __enter__(self) -> "HttpResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.release()
+
+
+class ClientState(Enum):
+    INITIALIZED = 0
+    STARTED = 1
+    STOPPED = 2
+
+T = TypeVar("T")
 
 class ResotoClient:
     """
@@ -70,15 +114,15 @@ class ResotoClient:
         self.resotocore_url = url
         self.psk = psk
         self.verify = verify
-        self.session_id = rnd_str()
-        self.holder = CertificatesHolder(
-            resotocore_url=url,
-            psk=psk,
-            renew_before=renew_before,
-        )
-        self.sync_client = SyncHttpClient(
-            url, psk, rnd_str(), self.holder.ssl_context if verify else None
-        )
+        self.renew_before = renew_before
+        self.event_loop_thread = EventLoopThread()
+        self.event_loop_thread.daemon = True
+        atexit.register(self.shutdown)
+
+        self.state_lock = threading.Lock()
+        self.client_state = ClientState.INITIALIZED
+
+        self.async_client = None
 
     def __enter__(self) -> "ResotoClient":
         self.start()
@@ -93,109 +137,88 @@ class ResotoClient:
         self.shutdown()
 
     def start(self) -> None:
-        self.sync_client.start()
-        self.sync_client.event_loop_thread.run_coroutine(self.holder.start())
+
+        with self.state_lock:
+            if self.client_state != ClientState.INITIALIZED:
+                return
+
+            self.event_loop_thread.start()
+            import time
+
+            while not self.event_loop_thread.running:
+                time.sleep(0.05)
+
+            self.async_client = AsyncResotoClient(
+                url=self.resotocore_url, psk=self.psk, verify=self.verify, renew_before=self.renew_before, loop=self.event_loop_thread.loop
+            )
+
+            self.event_loop_thread.run_coroutine(self.async_client.start())
+
+            self.client_state = ClientState.STARTED
 
 
     def shutdown(self) -> None:
-        self.holder.shutdown()
-        self.sync_client.stop()
+        with self.state_lock:
+            if self.client_state != ClientState.STARTED:
+                return
+            
+            if self.async_client:
+                self.event_loop_thread.run_coroutine(self.async_client.shutdown())
 
-    def _headers(self) -> Dict[str, str]:
+            self.event_loop_thread.stop()
+            self.client_state = ClientState.STOPPED
 
-        headers = {"Content-type": "application/json", "Accept": "application/json"}
 
-        if self.psk:
-            encode_jwt_to_headers(headers, {}, self.psk)
+    def _asynciter_to_iter(self, async_iter: AsyncIterator[T]) -> Iterator[T]:
+        while True:
+            try:
+                yield self.event_loop_thread.run_coroutine(async_iter.__anext__())
+            except StopAsyncIteration:
+                break
 
-        return headers
 
-    def _get(
-        self,
-        path: str,
-        params: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        stream: bool = False,
-    ) -> HttpResponse:
-        self.sync_client.ensure_running()
-        return self.sync_client.get(path, params, headers, stream)
+    def _await(self, awaitable: Callable[[AsyncResotoClient], Awaitable[T]]) -> T:
+        # a cheap check to not invoke the state lock
+        if self.client_state == ClientState.INITIALIZED:
+            self.start()
+        
+        if self.async_client:
+            return self.event_loop_thread.run_coroutine(awaitable(self.async_client))
+        else:
+            raise RuntimeError("Client was not found")
 
-    def _post(
-        self,
-        path: str,
-        json: Optional[JsValue] = None,
-        data: Optional[Any] = None,
-        params: Optional[Dict[str, str]] = None,
-        headers: Optional[Dict[str, str]] = None,
-        stream: bool = False,
-    ) -> HttpResponse:
-        self.sync_client.ensure_running()
-        return self.sync_client.post(path, json, data, params, headers, stream)
-
-    def _put(
-        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
-    ) -> HttpResponse:
-        self.sync_client.ensure_running()
-        return self.sync_client.put(path, json, params)
-
-    def _patch(self, path: str, json: JsValue) -> HttpResponse:
-        self.sync_client.ensure_running()
-        return self.sync_client.patch(path, json)
-
-    def _delete(
-        self, path: str, params: Optional[Dict[str, str]] = None
-    ) -> HttpResponse:
-        self.sync_client.ensure_running()
-        return self.sync_client.delete(path, params)
+    def _iterator(self, async_iter: Callable[[AsyncResotoClient], AsyncIterator[T]]) -> Iterator[T]:
+        # a cheap check to not invoke the state lock
+        if self.client_state == ClientState.INITIALIZED:
+            self.start()
+        
+        if self.async_client:
+            return self._asynciter_to_iter(async_iter(self.async_client))
+        else:
+            raise RuntimeError("Client was not found")
 
     def model(self) -> Model:
-        response: JsValue = self._get("/model").json()
-        # ResotoClient <= 2.2 returns a model dict fqn: kind.
-        if isinstance(response, dict):
-            return json_load(response, Model)
-        # ResotoClient > 2.2 returns a list of kinds.
-        elif isinstance(response, list):
-            kinds = {kd.fqn: kd for k in response if (kd := json_load(k, Kind))}
-            return Model(kinds)
-        else:
-            raise ValueError(f"Can not map to model. Unexpected response: {response}")
+        return self._await(lambda c: c.model())
 
     def update_model(self, update: List[Kind]) -> Model:
-        response = self._patch("/model", json=json_dump(update, List[Kind]))
-        model_json = response.json()
-        model = json_load(model_json, Model)
-        return model
+        return self._await(lambda c: c.update_model(update))
 
     def list_graphs(self) -> Set[str]:
-        response = self._get("/graph")
-        return set(response.json())
+        return self._await(lambda c: c.list_graphs())
 
     def get_graph(self, name: str) -> Optional[JsObject]:
-        response = self._get(f"/graph/{name}")
-        return response.json() if response.status_code == 200 else None
+        return self._await(lambda c: c.get_graph(name))
 
     def create_graph(self, name: str) -> JsObject:
-        response = self._post(f"/graph/{name}")
-        # root node
-        return response.json()
+        return self._await(lambda c: c.create_graph(name))
 
     def delete_graph(self, name: str, truncate: bool = False) -> str:
-        props = {"truncate": "true"} if truncate else {}
-        response = self._delete(f"/graph/{name}", params=props)
-        # root node
-        return response.text()
+        return self._await(lambda c: c.delete_graph(name, truncate))
 
     def create_node(
         self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto"
     ) -> JsObject:
-        response = self._post(
-            f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
-            json=node,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.create_node(parent_node_id, node_id, node, graph))
 
     def patch_node(
         self,
@@ -204,251 +227,89 @@ class ResotoClient:
         section: Optional[str] = None,
         graph: str = "resoto",
     ) -> JsObject:
-        section_path = f"/section/{section}" if section else ""
-        response = self._patch(
-            f"/graph/{graph}/node/{node_id}{section_path}",
-            json=node,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.patch_node(node_id, node, section, graph))
 
     def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
-        response = self._get(f"/graph/{graph}/node/{node_id}")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.get_node(node_id, graph))
 
     def delete_node(self, node_id: str, graph: str = "resoto") -> None:
-        response = self._delete(f"/graph/{graph}/node/{node_id}")
-        if response.status_code == 204:
-            return None
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.delete_node(node_id, graph))
 
     def patch_nodes(
         self, nodes: Sequence[JsObject], graph: str = "resoto"
     ) -> List[JsObject]:
-        response = self._patch(
-            f"/graph/{graph}/nodes",
-            json=nodes,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.patch_nodes(nodes, graph))
 
     def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
-        response = self._post(
-            f"/graph/{graph}/merge",
-            json=update,
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), GraphUpdate)
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.merge_graph(update, graph))
+    
     def add_to_batch(
         self,
         update: List[JsObject],
         batch_id: Optional[str] = None,
         graph: str = "resoto",
     ) -> Tuple[str, GraphUpdate]:
-        props = {"batch_id": batch_id} if batch_id else None
-        response = self._post(
-            f"/graph/{graph}/batch/merge",
-            json=update,
-            params=props,
-        )
-        if response.status_code == 200:
-            return response.headers["BatchId"], json_load(response.json(), GraphUpdate)
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.add_to_batch(update, batch_id, graph))
 
     def list_batches(self, graph: str = "resoto") -> List[JsObject]:
-        response = self._get(
-            f"/graph/{graph}/batch",
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.list_batches(graph))
 
     def commit_batch(self, batch_id: str, graph: str = "resoto") -> None:
-        response = self._post(
-            f"/graph/{graph}/batch/{batch_id}",
-        )
-        if response.status_code == 200:
-            return None
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.commit_batch(batch_id, graph))
 
     def abort_batch(self, batch_id: str, graph: str = "resoto") -> None:
-        response = self._delete(
-            f"/graph/{graph}/batch/{batch_id}",
-        )
-        if response.status_code == 200:
-            return None
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.abort_batch(batch_id, graph))
 
     def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
-        response = self._post(
-            f"/graph/{graph}/search/raw",
-            data=search,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.search_graph_raw(search, graph))
 
     def search_graph_explain(
         self, search: str, graph: str = "resoto"
     ) -> EstimatedSearchCost:
-        response = self._post(
-            f"/graph/{graph}/search/explain",
-            data=search,
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), EstimatedSearchCost)
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.search_graph_explain(search, graph))
 
     def search_list(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
-        params = {}
-        if section:
-            params["section"] = section
-
-        response = self._post(
-            f"/graph/{graph}/search/list", params=params, data=search, stream=True
-        )
-        if response.status_code == 200:
-            return map(lambda line: json_loadb(line), response.iter_lines())
-        else:
-            raise AttributeError(response.text())
+        return self._iterator(lambda c: c.search_list(search, section, graph))
 
     def search_graph(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
-        params = {}
-        if section:
-            params["section"] = section
-        response = self._post(
-            f"/graph/{graph}/search/graph", params=params, data=search, stream=True
-        )
-        if response.status_code == 200:
-            return map(lambda line: json_loadb(line), response.iter_lines())
-        else:
-            raise AttributeError(response.text())
-
+        return self._iterator(lambda c: c.search_graph(search, section, graph))
+    
     def search_aggregate(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
-        params = {}
-        if section:
-            params["section"] = section
-        response = self._post(
-            f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True
-        )
-        if response.status_code == 200:
-            return map(lambda line: json_loadb(line), response.iter_lines())
-        else:
-            raise AttributeError(response.text())
-
+        return self._iterator(lambda c: c.search_aggregate(search, section, graph))
+    
     def subscribers(self) -> List[Subscriber]:
-        response = self._get("/subscribers")
-        if response.status_code == 200:
-            return json_load(response.json(), List[Subscriber])
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.subscribers())
+    
     def subscribers_for_event(self, event_type: str) -> List[Subscriber]:
-        response = self._get(
-            f"/subscribers/for/{event_type}",
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), List[Subscriber])
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.subscribers_for_event(event_type))
+    
     def subscriber(self, uid: str) -> Optional[Subscriber]:
-        response = self._get(
-            f"/subscriber/{uid}",
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), Subscriber)
-        else:
-            return None
-
+        return self._await(lambda c: c.subscriber(uid))
+    
     def update_subscriber(
         self, uid: str, subscriptions: List[Subscription]
     ) -> Optional[Subscriber]:
-        response = self._put(
-            f"/subscriber/{uid}",
-            json=json_dump(subscriptions),
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), Subscriber)
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.update_subscriber(uid, subscriptions))
+    
     def add_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
-        props = {
-            "timeout": str(int(subscription.timeout.total_seconds())),
-            "wait_for_completion": str(subscription.wait_for_completion),
-        }
-        response = self._post(
-            f"/subscriber/{uid}/{subscription.message_type}",
-            params=props,
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), Subscriber)
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.add_subscription(uid, subscription))
+    
     def delete_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
-        response = self._delete(
-            f"/subscriber/{uid}/{subscription.message_type}",
-        )
-        if response.status_code == 200:
-            return json_load(response.json(), Subscriber)
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.delete_subscription(uid, subscription))
+    
     def delete_subscriber(self, uid: str) -> None:
-        response = self._delete(
-            f"/subscriber/{uid}",
-        )
-        if response.status_code == 204:
-            return None
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.delete_subscriber(uid))
+    
     def cli_evaluate(
         self, command: str, graph: str = "resoto", **env: str
     ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
-        props = {"graph": graph, "section": "reported", **env}
-        response = self._post(
-            "/cli/evaluate",
-            data=command,
-            params=props,
-        )
-        if response.status_code == 200:
-            return [
-                (
-                    ParsedCommands(
-                        json_load(json["parsed"], List[ParsedCommand]), json["env"]
-                    ),
-                    json["execute"],
-                )
-                for json in response.json()
-            ]
-        else:
-            raise AttributeError(response.text())
+        return self._await(lambda c: c.cli_evaluate(command, graph, **env))
 
     def cli_execute_raw(
         self,
@@ -459,34 +320,16 @@ class ResotoClient:
         files: Optional[FilenameLookup] = None,
         **env: str,
     ) -> HttpResponse:
-        props: Dict[str, str] = {}
-        if graph:
-            props["graph"] = graph
-        if section:
-            props["section"] = section
-
-        body: Optional[Any] = None
-        headers = headers or {}
-        if not files:
-            headers["Content-Type"] = "text/plain"
-            body = command.encode("utf-8")
-        else:
-            headers["Resoto-Shell-Command"] = command
-            headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
-            parts = {
-                name: (name, open(path, "rb"), "application/octet-stream")
-                for name, path in files.items()
-            }
-            body = MultipartEncoder(parts, "file-upload")
-
-        response = self._post(
-            "/cli/execute",
-            data=body,
-            params=props,
-            headers=headers,
-            stream=True,
+        resp =  self._await(lambda c: c.cli_execute_raw(command, graph, section, headers, files, **env))
+        return HttpResponse(
+            status_code=resp.status_code,
+            headers=resp.headers,
+            text=lambda: self.event_loop_thread.run_coroutine(resp.text()),
+            json=lambda: self.event_loop_thread.run_coroutine(resp.json()),
+            payload_bytes=lambda: self.event_loop_thread.run_coroutine(resp.payload_bytes()),
+            iter_lines=lambda: self._asynciter_to_iter(resp.async_iter_lines()),
+            release=resp.release,
         )
-        return response
 
     def cli_execute(
         self,
@@ -502,140 +345,51 @@ class ResotoClient:
 
         Binary or multi-part responses will trigger an exception.
         """
-
-        response = self.cli_execute_raw(
-            command=command,
-            graph=graph,
-            section=section,
-            headers=headers,
-            files=files,
-            **env,
+        return self._iterator(
+            lambda c: c.cli_execute(command, graph, section, headers, files, **env)
         )
-
-        if response.status_code == 200:
-            content_type = response.headers.get("Content-Type")
-            if content_type == "text/plain":
-                return iter([response.text()])
-            elif content_type == "application/json":
-                return iter([response.json()])
-            elif content_type == "application/x-ndjson":
-                return map(lambda line: json_loadb(line), response.iter_lines())
-            else:
-                raise NotImplementedError(
-                    f"Unsupported content type: {content_type}. Use cli_execute_raw instead."
-                )
-        else:
-            text = response.text()
-            raise AttributeError(text)
-
+    
     def cli_info(self) -> JsObject:
-        response = self._get("/cli/info")
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.cli_info())
+    
     def configs(self) -> Iterator[str]:
-        response = self._get("/configs", stream=True)
-        if response.status_code == 200:
-            return map(lambda l: json_loadb(l), response.iter_lines())
-        else:
-            raise AttributeError(response.text())
-
+        return self._iterator(lambda c: c.configs())
+    
     def config(self, config_id: str) -> JsObject:
-        response = self._get(
-            f"/config/{config_id}",
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.config(config_id))
+    
     def put_config(
         self, config_id: str, json: JsObject, validate: bool = True
     ) -> JsObject:
-        params = {"validate": "true" if validate else "false"}
-        response = self._put(
-            f"/config/{config_id}",
-            json=json,
-            params=params,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.put_config(config_id, json, validate))
+    
     def patch_config(self, config_id: str, json: JsObject) -> JsObject:
-        response = self._patch(
-            f"/config/{config_id}",
-            json=json,
-        )
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.patch_config(config_id, json))
+    
     def delete_config(self, config_id: str) -> None:
-        response = self._delete(
-            f"/config/{config_id}",
-        )
-        if response.status_code == 204:
-            return None
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.delete_config(config_id))
+    
     def get_configs_model(self) -> Model:
-        response = self._get("/configs/model")
-        if response.status_code == 200:
-            model_json = response.json()
-            model = json_load(model_json, Model)
-            return model
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.get_configs_model())
+    
     def update_configs_model(self, update: List[Kind]) -> Model:
-        response = self._patch(
-            "/configs/model",
-            json=json_dump(update),
-        )
-        model_json = response.json()
-        model = json_load(model_json, Model)
-        return model
-
+        return self._await(lambda c: c.update_configs_model(update))
+    
     def list_configs_validation(self) -> Iterator[str]:
-        response = self._get(
-            "/configs/validation",
-            stream=True,
-        )
-        return map(lambda l: json_loadb(l), response.iter_lines())
+        return self._iterator(lambda c: c.list_configs_validation())
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
-        response = self._get(
-            f"/config/{cfg_id}/validation",
-        )
-        return json_load(response.json(), ConfigValidation)
-
+        return self._await(lambda c: c.get_config_validation(cfg_id))
+    
     def put_config_validation(self, cfg: ConfigValidation) -> ConfigValidation:
-        response = self._put(
-            f"/config/{cfg.id}/validation",
-            json=json_dump(cfg),
-        )
-        return json_load(response.json(), ConfigValidation)
-
+        return self._await(lambda c: c.put_config_validation(cfg))
+    
     def ping(self) -> str:
-        response = self._get("/system/ping")
-        if response.status_code == 200:
-            return response.text()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.ping())
+    
     def ready(self) -> str:
-        response = self._get("/system/ready", headers={"Accept": "text/plain"})
-        if response.status_code == 200:
-            return response.text()
-        else:
-            raise AttributeError(response.text())
-
+        return self._await(lambda c: c.ready())
+    
     def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True) -> DataFrame:  # type: ignore
         if DataFrame is None:
             raise ImportError("Python package resotoclient[extras] is not installed")

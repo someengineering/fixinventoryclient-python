@@ -159,7 +159,7 @@ class CertificatesHolder:
         return self.__ssl_context # type: ignore
 
 
-    async def __certificates_watcher(self) -> None:
+    def __certificates_watcher(self) -> None:
         while True:
             with self.__exit:
                 if self.__loaded.is_set():
