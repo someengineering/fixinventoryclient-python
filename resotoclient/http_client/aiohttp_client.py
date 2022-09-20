@@ -7,6 +7,7 @@ import aiohttp
 import ssl
 from yarl import URL
 from asyncio import AbstractEventLoop
+from multidict import CIMultiDict
 
 class AioHttpClient(AsyncHttpClient):
     def __init__(
@@ -36,7 +37,7 @@ class AioHttpClient(AsyncHttpClient):
     def _default_query_params(self) -> Dict[str, str]:
         return {"session_id": self.session_id}
 
-    def _default_headers(self) -> Dict[str, str]:
+    def _default_headers(self) -> CIMultiDict[str]:
         default_headers = {
             "Content-type": "application/json",
             "Accept": "application/json",
@@ -45,11 +46,12 @@ class AioHttpClient(AsyncHttpClient):
         if self.psk:
             encode_jwt_to_headers(default_headers, {}, self.psk)
 
-        return default_headers
+        return CIMultiDict(default_headers)
 
     async def lines(self, response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:
         async for line in response.content:
-            yield line
+            # strip the newline as it was done in the old http client
+            yield line.rstrip()
 
     async def get(
         self,
@@ -75,9 +77,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        request_headers.update(headers or {})
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
+        request_headers.update(headers or {})
         resp = await self.session.get(
             url, ssl=await self._ssl_context(), headers=request_headers
         )
@@ -119,9 +121,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        request_headers.update(headers or {})
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
+        request_headers.update(headers or {})
         resp = await self.session.post(
             url, ssl=await self._ssl_context(), headers=request_headers, json=json, data=data
         )
