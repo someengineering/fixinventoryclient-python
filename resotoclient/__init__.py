@@ -66,6 +66,7 @@ class HttpResponse:
         headers: The HTTP headers of the response.
         text: A function that returns response body as a string.
         json: A function that returns response body as a JSON object.
+        payload_bytes: A function that returns response body as a byte array.
         iter_lines: A function that returns the iterator of the response body, present if streaming was requested in a async client.
         release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
     """
@@ -74,6 +75,7 @@ class HttpResponse:
     headers: Mapping[str, str]
     text: Callable[[], str]
     json: Callable[[], Any]
+    payload_bytes: Callable[[], bytes]
     iter_lines: Callable[[], Iterator[bytes]]
     release: Callable[[], None]
 
@@ -324,6 +326,7 @@ class ResotoClient:
             headers=resp.headers,
             text=lambda: self.event_loop_thread.run_coroutine(resp.text()),
             json=lambda: self.event_loop_thread.run_coroutine(resp.json()),
+            payload_bytes=lambda: self.event_loop_thread.run_coroutine(resp.payload_bytes()),
             iter_lines=lambda: self._asynciter_to_iter(resp.async_iter_lines()),
             release=resp.release,
         )

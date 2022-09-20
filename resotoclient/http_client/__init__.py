@@ -14,6 +14,7 @@ class HttpResponse:
         headers: The HTTP headers of the response.
         text: A function that returns response body as a string.
         json: A function that returns response body as a JSON object.
+        payload_bytes: A function that returns response body as a byte array.
         async_iter_lines: A function that returns the async iterator of the response body, present if streaming was requested in a async client.
         release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
     """
@@ -22,6 +23,7 @@ class HttpResponse:
     headers: Mapping[str, str]
     text: Callable[[], Awaitable[str]]
     json: Callable[[], Awaitable[Any]]
+    payload_bytes: Callable[[], Awaitable[bytes]]
     async_iter_lines: Callable[[], AsyncIterator[bytes]]
     release: Callable[[], None]
 

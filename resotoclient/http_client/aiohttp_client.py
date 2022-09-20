@@ -90,6 +90,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
+            payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
@@ -134,6 +135,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
+            payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
@@ -164,6 +166,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
+            payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
@@ -190,6 +193,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
+            payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
@@ -216,6 +220,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=resp.headers,
             text=resp.text,
             json=resp.json,
+            payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
         )
