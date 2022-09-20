@@ -122,7 +122,7 @@ class CertificatesHolder:
         self.__ssl_context = None
         self.__renew_before = renew_before
         self.__watcher = Thread(
-            target=self.__certificates_watcher, name="certificates_watcher"
+            target=self.__certificates_watcher, name="certificates_watcher", daemon=True
         )
         self.__load_lock = Lock()
         self.__loaded = Event()
