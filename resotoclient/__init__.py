@@ -30,7 +30,6 @@ from resotoclient.models import (
 )
 from resotoclient.async_client import ResotoClient as AsyncResotoClient
 from resotoclient.http_client.event_loop_thread import EventLoopThread
-from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import timedelta
@@ -77,6 +76,17 @@ class HttpResponse:
     json: Callable[[], Any]
     iter_lines: Callable[[], Iterator[bytes]]
     release: Callable[[], None]
+
+    def __enter__(self) -> "HttpResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.release()
 
 
 class ClientState(Enum):

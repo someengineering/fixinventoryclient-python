@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping, Any
+from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping, Any, Type
 from attrs import define
 from resotoclient.models import JsValue
-
+from types import TracebackType
 
 @define
 class HttpResponse:
@@ -24,6 +24,17 @@ class HttpResponse:
     json: Callable[[], Awaitable[Any]]
     async_iter_lines: Callable[[], AsyncIterator[bytes]]
     release: Callable[[], None]
+
+    def __enter__(self) -> "HttpResponse":
+        return self
+
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]],
+        exc_val: Optional[BaseException],
+        exc_tb: Optional[TracebackType],
+    ) -> None:
+        self.release()
 
 
 class AsyncHttpClient(ABC):
