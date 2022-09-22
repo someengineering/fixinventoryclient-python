@@ -17,6 +17,7 @@ class HttpResponse:
         payload_bytes: A function that returns response body as a byte array.
         async_iter_lines: A function that returns the async iterator of the response body, present if streaming was requested in a async client.
         release: Release the resources associated with the response if it is no longer needed, e.g. during streaming a streamed.
+        underlying: The underlying HTTP response object, depends on the HTTP client implementation.
     """
 
     status_code: int
@@ -26,6 +27,7 @@ class HttpResponse:
     payload_bytes: Callable[[], Awaitable[bytes]]
     async_iter_lines: Callable[[], AsyncIterator[bytes]]
     release: Callable[[], None]
+    undrelying: Any
 
     def __enter__(self) -> "HttpResponse":
         return self
