@@ -471,7 +471,7 @@ class ResotoClient:
         if Digraph is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
 
-        digraph = Digraph(comment=search)
+        digraph = Digraph(comment=search) # type: ignore
         digraph.format = format
         digraph.engine = engine
         digraph.graph_attr = {"rankdir": "LR", "splines": "true", "overlap": "false"}  # type: ignore
@@ -504,7 +504,7 @@ class ResotoClient:
             elif elem.get("type") == "edge":
                 digraph.edge(js_get(elem, ["from"]), js_get(elem, ["to"]))  # type: ignore
 
-        return digraph
+        return digraph  # type: ignore
 
 
 def rnd_str(str_len: int = 10) -> str:

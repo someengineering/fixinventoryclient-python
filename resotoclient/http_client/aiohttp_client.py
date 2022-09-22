@@ -93,6 +93,7 @@ class AioHttpClient(AsyncHttpClient):
             payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
+            undrelying=resp,
         )
 
     async def post(
@@ -138,6 +139,7 @@ class AioHttpClient(AsyncHttpClient):
             payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
+            undrelying=resp,
         )
 
     async def put(
@@ -169,6 +171,7 @@ class AioHttpClient(AsyncHttpClient):
             payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
+            undrelying=resp,
         )
 
     async def patch(self, path: str, json: JsValue) -> HttpResponse:
@@ -196,6 +199,7 @@ class AioHttpClient(AsyncHttpClient):
             payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
+            undrelying=resp,
         )
 
     async def delete(self, path: str, params: Optional[Dict[str, str]]) -> HttpResponse:
@@ -223,4 +227,5 @@ class AioHttpClient(AsyncHttpClient):
             payload_bytes=resp.read, 
             async_iter_lines=lambda: self.lines(resp),
             release=resp.release,
+            undrelying=resp,
         )
