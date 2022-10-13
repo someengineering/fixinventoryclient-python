@@ -621,6 +621,10 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
+    async def data(self) -> Optional[JsObject]:
+        response = await self._get(f"/system/data")
+        return await response.json() if response.status_code == 200 else None
+
 
 def rnd_str(str_len: int = 10) -> str:
     return "".join(
