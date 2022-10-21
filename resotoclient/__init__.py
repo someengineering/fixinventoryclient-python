@@ -11,9 +11,9 @@ from typing import (
     Mapping,
     Type,
     AsyncIterator,
-    TypeVar, 
+    TypeVar,
     Awaitable,
-    Callable
+    Callable,
 )
 from types import TracebackType
 from resotoclient.models import (
@@ -43,7 +43,7 @@ from attrs import define
 
 try:
     from pandas import DataFrame  # type: ignore
-    import pandas as pd
+    import pandas as pd  # type: ignore
 except ImportError:
     DataFrame = None
 try:
@@ -55,6 +55,7 @@ except ImportError:
 FilenameLookup = Dict[str, str]
 
 log: logging.Logger = logging.getLogger("resotoclient")
+
 
 @define
 class HttpResponse:
@@ -96,7 +97,9 @@ class ClientState(Enum):
     STARTED = 1
     STOPPED = 2
 
+
 T = TypeVar("T")
+
 
 class ResotoClient:
     """
@@ -149,25 +152,27 @@ class ResotoClient:
                 time.sleep(0.05)
 
             self.async_client = AsyncResotoClient(
-                url=self.resotocore_url, psk=self.psk, verify=self.verify, renew_before=self.renew_before, loop=self.event_loop_thread.loop
+                url=self.resotocore_url,
+                psk=self.psk,
+                verify=self.verify,
+                renew_before=self.renew_before,
+                loop=self.event_loop_thread.loop,
             )
 
             self.event_loop_thread.run_coroutine(self.async_client.start())
 
             self.client_state = ClientState.STARTED
 
-
     def shutdown(self) -> None:
         with self.state_lock:
             if self.client_state != ClientState.STARTED:
                 return
-            
+
             if self.async_client:
                 self.event_loop_thread.run_coroutine(self.async_client.shutdown())
 
             self.event_loop_thread.stop()
             self.client_state = ClientState.STOPPED
-
 
     def _asynciter_to_iter(self, async_iter: AsyncIterator[T]) -> Iterator[T]:
         while True:
@@ -176,12 +181,11 @@ class ResotoClient:
             except StopAsyncIteration:
                 break
 
-
     def _await(self, awaitable: Callable[[AsyncResotoClient], Awaitable[T]]) -> T:
         # a cheap check to not invoke the state lock
         if self.client_state == ClientState.INITIALIZED:
             self.start()
-        
+
         if self.async_client:
             return self.event_loop_thread.run_coroutine(awaitable(self.async_client))
         else:
@@ -191,7 +195,7 @@ class ResotoClient:
         # a cheap check to not invoke the state lock
         if self.client_state == ClientState.INITIALIZED:
             self.start()
-        
+
         if self.async_client:
             return self._asynciter_to_iter(async_iter(self.async_client))
         else:
@@ -215,9 +219,7 @@ class ResotoClient:
     def delete_graph(self, name: str, truncate: bool = False) -> str:
         return self._await(lambda c: c.delete_graph(name, truncate))
 
-    def create_node(
-        self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto"
-    ) -> JsObject:
+    def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
         return self._await(lambda c: c.create_node(parent_node_id, node_id, node, graph))
 
     def patch_node(
@@ -235,14 +237,12 @@ class ResotoClient:
     def delete_node(self, node_id: str, graph: str = "resoto") -> None:
         return self._await(lambda c: c.delete_node(node_id, graph))
 
-    def patch_nodes(
-        self, nodes: Sequence[JsObject], graph: str = "resoto"
-    ) -> List[JsObject]:
+    def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
         return self._await(lambda c: c.patch_nodes(nodes, graph))
 
     def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
         return self._await(lambda c: c.merge_graph(update, graph))
-    
+
     def add_to_batch(
         self,
         update: List[JsObject],
@@ -263,9 +263,7 @@ class ResotoClient:
     def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
         return self._await(lambda c: c.search_graph_raw(search, graph))
 
-    def search_graph_explain(
-        self, search: str, graph: str = "resoto"
-    ) -> EstimatedSearchCost:
+    def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
         return self._await(lambda c: c.search_graph_explain(search, graph))
 
     def search_list(
@@ -277,35 +275,33 @@ class ResotoClient:
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
         return self._iterator(lambda c: c.search_graph(search, section, graph))
-    
+
     def search_aggregate(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> Iterator[JsObject]:
         return self._iterator(lambda c: c.search_aggregate(search, section, graph))
-    
+
     def subscribers(self) -> List[Subscriber]:
         return self._await(lambda c: c.subscribers())
-    
+
     def subscribers_for_event(self, event_type: str) -> List[Subscriber]:
         return self._await(lambda c: c.subscribers_for_event(event_type))
-    
+
     def subscriber(self, uid: str) -> Optional[Subscriber]:
         return self._await(lambda c: c.subscriber(uid))
-    
-    def update_subscriber(
-        self, uid: str, subscriptions: List[Subscription]
-    ) -> Optional[Subscriber]:
+
+    def update_subscriber(self, uid: str, subscriptions: List[Subscription]) -> Optional[Subscriber]:
         return self._await(lambda c: c.update_subscriber(uid, subscriptions))
-    
+
     def add_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
         return self._await(lambda c: c.add_subscription(uid, subscription))
-    
+
     def delete_subscription(self, uid: str, subscription: Subscription) -> Subscriber:
         return self._await(lambda c: c.delete_subscription(uid, subscription))
-    
+
     def delete_subscriber(self, uid: str) -> None:
         return self._await(lambda c: c.delete_subscriber(uid))
-    
+
     def cli_evaluate(
         self, command: str, graph: str = "resoto", **env: str
     ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
@@ -320,7 +316,7 @@ class ResotoClient:
         files: Optional[FilenameLookup] = None,
         **env: str,
     ) -> HttpResponse:
-        resp =  self._await(lambda c: c.cli_execute_raw(command, graph, section, headers, files, **env))
+        resp = self._await(lambda c: c.cli_execute_raw(command, graph, section, headers, files, **env))
         return HttpResponse(
             status_code=resp.status_code,
             headers=resp.headers,
@@ -345,51 +341,47 @@ class ResotoClient:
 
         Binary or multi-part responses will trigger an exception.
         """
-        return self._iterator(
-            lambda c: c.cli_execute(command, graph, section, headers, files, **env)
-        )
-    
+        return self._iterator(lambda c: c.cli_execute(command, graph, section, headers, files, **env))
+
     def cli_info(self) -> JsObject:
         return self._await(lambda c: c.cli_info())
-    
+
     def configs(self) -> Iterator[str]:
         return self._iterator(lambda c: c.configs())
-    
+
     def config(self, config_id: str) -> JsObject:
         return self._await(lambda c: c.config(config_id))
-    
-    def put_config(
-        self, config_id: str, json: JsObject, validate: bool = True
-    ) -> JsObject:
+
+    def put_config(self, config_id: str, json: JsObject, validate: bool = True) -> JsObject:
         return self._await(lambda c: c.put_config(config_id, json, validate))
-    
+
     def patch_config(self, config_id: str, json: JsObject) -> JsObject:
         return self._await(lambda c: c.patch_config(config_id, json))
-    
+
     def delete_config(self, config_id: str) -> None:
         return self._await(lambda c: c.delete_config(config_id))
-    
+
     def get_configs_model(self) -> Model:
         return self._await(lambda c: c.get_configs_model())
-    
+
     def update_configs_model(self, update: List[Kind]) -> Model:
         return self._await(lambda c: c.update_configs_model(update))
-    
+
     def list_configs_validation(self) -> Iterator[str]:
         return self._iterator(lambda c: c.list_configs_validation())
 
     def get_config_validation(self, cfg_id: str) -> Optional[ConfigValidation]:
         return self._await(lambda c: c.get_config_validation(cfg_id))
-    
+
     def put_config_validation(self, cfg: ConfigValidation) -> ConfigValidation:
         return self._await(lambda c: c.put_config_validation(cfg))
-    
+
     def ping(self) -> str:
         return self._await(lambda c: c.ping())
-    
+
     def ready(self) -> str:
         return self._await(lambda c: c.ready())
-    
+
     def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True) -> DataFrame:  # type: ignore
         if DataFrame is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
@@ -406,11 +398,7 @@ class ResotoClient:
             if not isinstance(node_data, dict):
                 return None
             if aggregate_search:
-                if (
-                    flatten
-                    and "group" in node_data
-                    and isinstance(node_data["group"], dict)
-                ):
+                if flatten and "group" in node_data and isinstance(node_data["group"], dict):
                     group = node_data["group"]
                     del node_data["group"]
                     for k, v in group.items():
@@ -471,7 +459,7 @@ class ResotoClient:
         if Digraph is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
 
-        digraph = Digraph(comment=search) # type: ignore
+        digraph = Digraph(comment=search)  # type: ignore
         digraph.format = format
         digraph.engine = engine
         digraph.graph_attr = {"rankdir": "LR", "splines": "true", "overlap": "false"}  # type: ignore
@@ -508,9 +496,7 @@ class ResotoClient:
 
 
 def rnd_str(str_len: int = 10) -> str:
-    return "".join(
-        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
-    )
+    return "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len))
 
 
 def js_find(node: JsObject, path: List[str]) -> Optional[str]:
