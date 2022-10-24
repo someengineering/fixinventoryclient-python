@@ -114,11 +114,13 @@ class CertificatesHolder:
         self,
         resotocore_url: str,
         psk: Optional[str],
+        custom_ca_cert_path: Optional[str],
         renew_before: timedelta,
     ) -> None:
         self.resotocore_url = resotocore_url
         self.psk = psk
         self.__ca_cert = None
+        self.__custom_ca_cert_path = custom_ca_cert_path
         self.__ssl_context = None
         self.__renew_before = renew_before
         self.__watcher = Thread(
@@ -141,9 +143,15 @@ class CertificatesHolder:
 
     async def load(self) -> None:
         with self.__load_lock:
-            self.__ca_cert = await load_cert_from_core(
-                self.resotocore_url, self.psk, self.log
-            )
+            if self.__custom_ca_cert_path is not None:
+                self.log.debug(
+                    f"Loading CA certificate from {self.__custom_ca_cert_path}"
+                )
+                self.__ca_cert = load_cert_from_file(self.__custom_ca_cert_path)
+            else:
+                self.__ca_cert = await load_cert_from_core(
+                    self.resotocore_url, self.psk, self.log
+                )
             ctx = create_default_context(purpose=Purpose.SERVER_AUTH)
             ctx.load_verify_locations(cadata=ca_bundle(self.__ca_cert))
             self.__ssl_context = ctx

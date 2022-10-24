@@ -116,6 +116,7 @@ class ResotoClient:
     ):
         self.resotocore_url = url
         self.psk = psk
+        self.custom_ca_cert_path = custom_ca_cert_path
         self.verify = verify
         self.renew_before = renew_before
         self.event_loop_thread = EventLoopThread()
@@ -154,6 +155,7 @@ class ResotoClient:
             self.async_client = AsyncResotoClient(
                 url=self.resotocore_url,
                 psk=self.psk,
+                custom_ca_cert_path=self.custom_ca_cert_path,
                 verify=self.verify,
                 renew_before=self.renew_before,
                 loop=self.event_loop_thread.loop,

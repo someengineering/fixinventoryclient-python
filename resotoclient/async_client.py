@@ -29,11 +29,11 @@ from resotoclient.models import (
     Kind,
 )
 from resotoclient.http_client.aiohttp_client import AioHttpClient, HttpResponse
-from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import timedelta
 from asyncio import AbstractEventLoop, Queue
+from aiohttp import MultipartWriter
 
 FilenameLookup = Dict[str, str]
 
@@ -49,6 +49,7 @@ class ResotoClient:
         self,
         url: str,
         psk: Optional[str],
+        custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
         renew_before: timedelta = timedelta(days=1),
         loop: Optional[AbstractEventLoop] = None,
@@ -60,6 +61,7 @@ class ResotoClient:
         self.holder = CertificatesHolder(
             resotocore_url=url,
             psk=psk,
+            custom_ca_cert_path=custom_ca_cert_path,
             renew_before=renew_before,
         )
         self.http_client = AioHttpClient(
@@ -436,20 +438,31 @@ class ResotoClient:
         if not files:
             headers["Content-Type"] = "text/plain"
             body = command.encode("utf-8")
+            response = await self._post(
+                "/cli/execute",
+                data=body,
+                params=props,
+                headers=headers,
+                stream=True,
+            )
+            return response
         else:
             headers["Resoto-Shell-Command"] = command
             headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
-            parts = {name: (name, open(path, "rb"), "application/octet-stream") for name, path in files.items()}
-            body = MultipartEncoder(parts, "file-upload")
 
-        response = await self._post(
-            "/cli/execute",
-            data=body,
-            params=props,
-            headers=headers,
-            stream=True,
-        )
-        return response
+            with MultipartWriter(boundary="file-upload") as mpwriter:
+                for name, path in files.items():
+                    part = mpwriter.append(open(path, "rb"))
+                    part.set_content_disposition("form-data", name=name)
+
+                response = await self._post(
+                    "/cli/execute",
+                    data=mpwriter,
+                    params=props,
+                    headers=headers,
+                    stream=True,
+                )
+                return response
 
     async def cli_execute(
         self,
