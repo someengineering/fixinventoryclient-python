@@ -29,7 +29,6 @@ from resotoclient.models import (
     Kind,
 )
 from resotoclient.http_client.aiohttp_client import AioHttpClient, HttpResponse
-from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import timedelta

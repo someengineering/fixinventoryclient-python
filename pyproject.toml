@@ -41,6 +41,8 @@ cryptography=">=36.0.2"
 pandas = { version = "^1.4.2", optional = true }
 graphviz = { version = "^0.20", optional = true }
 aiohttp = "^3.8.1"
+certifi = "^2022.9.24"
+
 
 [tool.poetry.extras]
 extras = ["pandas", "graphviz"]
