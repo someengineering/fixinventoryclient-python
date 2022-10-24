@@ -1,3 +1,4 @@
+import json
 import logging
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import (
@@ -32,7 +33,7 @@ from requests_toolbelt import MultipartEncoder  # type: ignore
 import random
 import string
 from datetime import timedelta
-from asyncio import AbstractEventLoop
+from asyncio import AbstractEventLoop, Queue
 
 FilenameLookup = Dict[str, str]
 
@@ -50,7 +51,7 @@ class ResotoClient:
         psk: Optional[str],
         verify: bool = True,
         renew_before: timedelta = timedelta(days=1),
-        loop: Optional[AbstractEventLoop]=None,
+        loop: Optional[AbstractEventLoop] = None,
     ):
         self.resotocore_url = url
         self.psk = psk
@@ -62,7 +63,11 @@ class ResotoClient:
             renew_before=renew_before,
         )
         self.http_client = AioHttpClient(
-            url=url, psk=psk, session_id=self.session_id, get_ssl_context=self.holder.ssl_context if verify else None, loop=loop 
+            url=url,
+            psk=psk,
+            session_id=self.session_id,
+            get_ssl_context=self.holder.ssl_context if verify else None,
+            loop=loop,
         )
 
     async def __aenter__(self) -> "ResotoClient":
@@ -79,7 +84,6 @@ class ResotoClient:
 
     async def start(self) -> None:
         await self.holder.start()
-
 
     async def shutdown(self) -> None:
         await self.http_client.close()
@@ -114,17 +118,13 @@ class ResotoClient:
     ) -> HttpResponse:
         return await self.http_client.post(path, json, data, params, headers, stream)
 
-    async def _put(
-        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
-    ) -> HttpResponse:
+    async def _put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
         return await self.http_client.put(path, json, params)
 
     async def _patch(self, path: str, json: JsValue) -> HttpResponse:
         return await self.http_client.patch(path, json)
 
-    async def _delete(
-        self, path: str, params: Optional[Dict[str, str]] = None
-    ) -> HttpResponse:
+    async def _delete(self, path: str, params: Optional[Dict[str, str]] = None) -> HttpResponse:
         return await self.http_client.delete(path, params)
 
     async def model(self) -> Model:
@@ -164,9 +164,7 @@ class ResotoClient:
         # root node
         return await response.text()
 
-    async  def create_node(
-        self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto"
-    ) -> JsObject:
+    async def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
         response = await self._post(
             f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
             json=node,
@@ -207,9 +205,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def patch_nodes(
-        self, nodes: Sequence[JsObject], graph: str = "resoto"
-    ) -> List[JsObject]:
+    async def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
         response = await self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
@@ -283,9 +279,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def search_graph_explain(
-        self, search: str, graph: str = "resoto"
-    ) -> EstimatedSearchCost:
+    async def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
         response = await self._post(
             f"/graph/{graph}/search/explain",
             data=search,
@@ -302,9 +296,7 @@ class ResotoClient:
         if section:
             params["section"] = section
 
-        response = await self._post(
-            f"/graph/{graph}/search/list", params=params, data=search, stream=True
-        )
+        response = await self._post(f"/graph/{graph}/search/list", params=params, data=search, stream=True)
         if response.status_code == 200:
             async for line in response.async_iter_lines():
                 yield json_loadb(line)
@@ -317,9 +309,7 @@ class ResotoClient:
         params = {}
         if section:
             params["section"] = section
-        response = await self._post(
-            f"/graph/{graph}/search/graph", params=params, data=search, stream=True
-        )
+        response = await self._post(f"/graph/{graph}/search/graph", params=params, data=search, stream=True)
         if response.status_code == 200:
             async for line in response.async_iter_lines():
                 yield json_loadb(line)
@@ -332,9 +322,7 @@ class ResotoClient:
         params = {}
         if section:
             params["section"] = section
-        response = await self._post(
-            f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True
-        )
+        response = await self._post(f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True)
         if response.status_code == 200:
             async for line in response.async_iter_lines():
                 yield json_loadb(line)
@@ -366,9 +354,7 @@ class ResotoClient:
         else:
             return None
 
-    async def update_subscriber(
-        self, uid: str, subscriptions: List[Subscription]
-    ) -> Optional[Subscriber]:
+    async def update_subscriber(self, uid: str, subscriptions: List[Subscription]) -> Optional[Subscriber]:
         response = await self._put(
             f"/subscriber/{uid}",
             json=json_dump(subscriptions),
@@ -422,9 +408,7 @@ class ResotoClient:
         if response.status_code == 200:
             return [
                 (
-                    ParsedCommands(
-                        json_load(json["parsed"], List[ParsedCommand]), json["env"]
-                    ),
+                    ParsedCommands(json_load(json["parsed"], List[ParsedCommand]), json["env"]),
                     json["execute"],
                 )
                 for json in await response.json()
@@ -455,10 +439,7 @@ class ResotoClient:
         else:
             headers["Resoto-Shell-Command"] = command
             headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
-            parts = {
-                name: (name, open(path, "rb"), "application/octet-stream")
-                for name, path in files.items()
-            }
+            parts = {name: (name, open(path, "rb"), "application/octet-stream") for name, path in files.items()}
             body = MultipartEncoder(parts, "file-upload")
 
         response = await self._post(
@@ -504,9 +485,7 @@ class ResotoClient:
                 async for line in response.async_iter_lines():
                     yield json_loadb(line)
             else:
-                raise NotImplementedError(
-                    f"Unsupported content type: {content_type}. Use cli_execute_raw instead."
-                )
+                raise NotImplementedError(f"Unsupported content type: {content_type}. Use cli_execute_raw instead.")
         else:
             text = await response.text()
             raise AttributeError(text)
@@ -535,9 +514,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def put_config(
-        self, config_id: str, json: JsObject, validate: bool = True
-    ) -> JsObject:
+    async def put_config(self, config_id: str, json: JsObject, validate: bool = True) -> JsObject:
         params = {"validate": "true" if validate else "false"}
         response = await self._put(
             f"/config/{config_id}",
@@ -621,8 +598,15 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
+    async def events(
+        self, event_types: Optional[Set[str]] = None, send_events: Optional[Queue[JsObject]] = None
+    ) -> AsyncIterator[JsObject]:
+        params = {"show": ",".join(event_types)} if event_types else None
+        async with self.http_client.websocket("/events", params, send_events) as incoming:  # type: ignore
+            while True:
+                event = await incoming.get()
+                yield json.loads(event)
+
 
 def rnd_str(str_len: int = 10) -> str:
-    return "".join(
-        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
-    )
+    return "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len))
