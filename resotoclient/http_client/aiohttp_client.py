@@ -19,6 +19,11 @@ from multidict import CIMultiDict
 log = logging.getLogger(__name__)
 
 
+# The receiver of a poison pill is sentenced to die
+class PoisonPill:
+    pass
+
+
 class AioHttpClient(AsyncHttpClient):
     def __init__(
         self,
@@ -240,13 +245,13 @@ class AioHttpClient(AsyncHttpClient):
         path: str,
         params: Optional[Dict[str, str]] = None,
         send_queue: Optional[Queue[Union[str, JsObject]]] = None,
-    ) -> AsyncIterator[Queue[str]]:
+    ) -> AsyncIterator[Queue[Union[str, PoisonPill]]]:
         async with self.session.ws_connect(  # type: ignore
             URL(self.url).with_path(path).with_query(params or {}),
             headers=self._default_headers(),
             ssl=await self._ssl_context(),
         ) as ws:
-            out_queue: Queue[str] = Queue()
+            out_queue: Queue[Union[str, PoisonPill]] = Queue()
 
             async def receive() -> None:
                 try:
@@ -277,6 +282,7 @@ class AioHttpClient(AsyncHttpClient):
             to_wait = asyncio.gather(rt, asyncio.create_task(send(send_queue))) if send_queue is not None else rt
 
             async def close_ws() -> None:
+                out_queue.put_nowait(PoisonPill())
                 if not to_wait.cancelled():
                     to_wait.cancel()
                 if not ws.closed:
