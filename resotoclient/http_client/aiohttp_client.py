@@ -282,7 +282,7 @@ class AioHttpClient(AsyncHttpClient):
             to_wait = asyncio.gather(rt, asyncio.create_task(send(send_queue))) if send_queue is not None else rt
 
             async def close_ws() -> None:
-                out_queue.put_nowait(PoisonPill())
+                await out_queue.put(PoisonPill())
                 if not to_wait.cancelled():
                     to_wait.cancel()
                 if not ws.closed:
