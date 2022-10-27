@@ -28,7 +28,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from resotoclient.http_client.aiohttp_client import AioHttpClient, HttpResponse
+from resotoclient.http_client.aiohttp_client import AioHttpClient, HttpResponse, PoisonPill
 import random
 import string
 from datetime import timedelta
@@ -616,9 +616,13 @@ class ResotoClient:
     ) -> AsyncIterator[JsObject]:
         params = {"show": ",".join(event_types)} if event_types else None
         async with self.http_client.websocket("/events", params, send_events) as incoming:  # type: ignore
-            while True:
+            flag = True
+            while flag:
                 event = await incoming.get()
-                yield json.loads(event)
+                if isinstance(event, PoisonPill):
+                    flag = False
+                else:
+                    yield json.loads(event)
 
 
 def rnd_str(str_len: int = 10) -> str:
