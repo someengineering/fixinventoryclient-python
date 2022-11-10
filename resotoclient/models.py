@@ -22,6 +22,7 @@ class Property:
     kind: str
     required: bool = False
     description: Optional[str] = None
+    synthetic: Optional[JsObject] = None
 
 
 @dataclass
@@ -30,7 +31,7 @@ class Kind:
     runtime_kind: Optional[str]
     properties: Optional[List[Property]]
     bases: Optional[List[str]]
-    aggregate_root: Optional[bool] = True
+    aggregate_root: Optional[bool] = False
     successor_kinds: Optional[Dict[str, List[str]]] = None
 
 
