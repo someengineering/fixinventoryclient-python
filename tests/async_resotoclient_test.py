@@ -45,7 +45,7 @@ async def test_listen_to_events(core_client: ResotoClient) -> None:
         await send_queue.put(dict(kind="event", message_type="ignore_me"))
         await send_queue.put(msg)
     async for event in core_client.events({"test"}, send_queue):
-        event["data"].pop("received_at")  # type: ignore
+        event["data"].pop("received_at", None)  # type: ignore
         received.append(event)
         if len(received) == len(messages):
             break
