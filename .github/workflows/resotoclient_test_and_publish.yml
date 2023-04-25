@@ -29,6 +29,9 @@ jobs:
           - 8529:8529
       resotocore:
         image: somecr.io/someengineering/resotocore:3.3.3
+        args:
+         - --override
+         - resotocore.api.web_hosts=0.0.0.0
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
         ports:
