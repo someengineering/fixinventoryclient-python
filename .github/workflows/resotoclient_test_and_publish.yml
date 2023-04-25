@@ -22,7 +22,7 @@ jobs:
         working-directory: ./
     services:
       arangodb:
-        image: arangodb:3.10.5
+        image: arangodb:3.8.3
         env:
           ARANGO_NO_AUTH: 1
         ports:
