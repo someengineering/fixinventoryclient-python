@@ -14,6 +14,7 @@ from typing import (
     TypeVar,
     Awaitable,
     Callable,
+    cast,
 )
 from types import TracebackType
 from resotoclient.models import (
@@ -109,13 +110,16 @@ class ResotoClient:
     def __init__(
         self,
         url: str,
+        *,
         psk: Optional[str],
+        additional_headers: Optional[Dict[str, str]] = None,
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
         renew_before: timedelta = timedelta(days=1),
     ):
         self.resotocore_url = url
         self.psk = psk
+        self.additional_headers = additional_headers
         self.custom_ca_cert_path = custom_ca_cert_path
         self.verify = verify
         self.renew_before = renew_before
@@ -141,7 +145,6 @@ class ResotoClient:
         self.shutdown()
 
     def start(self) -> None:
-
         with self.state_lock:
             if self.client_state != ClientState.INITIALIZED:
                 return
@@ -155,6 +158,7 @@ class ResotoClient:
             self.async_client = AsyncResotoClient(
                 url=self.resotocore_url,
                 psk=self.psk,
+                additional_headers=self.additional_headers,
                 custom_ca_cert_path=self.custom_ca_cert_path,
                 verify=self.verify,
                 renew_before=self.renew_before,
@@ -409,7 +413,7 @@ class ResotoClient:
                 if flatten:
                     if not "reported" in node or not isinstance(node["reported"], dict):
                         return None
-                    node_data = node["reported"]
+                    node_data = cast(Dict[str, Any], node["reported"])
                     for k, v in node.items():
                         if isinstance(v, dict) and k != "reported":
                             node_data[k] = v

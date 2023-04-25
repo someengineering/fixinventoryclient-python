@@ -48,12 +48,24 @@ class ResotoClient:
     def __init__(
         self,
         url: str,
+        *,
         psk: Optional[str],
+        additional_headers: Optional[Dict[str, str]] = None,
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
         renew_before: timedelta = timedelta(days=1),
         loop: Optional[AbstractEventLoop] = None,
     ):
+        """
+        Create a new resoto client instance.
+        :param url: the url of the resotocore instance.
+        :param psk: the optional pre-shared key to use for authentication. The PSK is used to authenticate the client. If you do not have access to the PSK, you can use the auth_header parameter to authenticate with a JWT token.
+        :param additional_headers: additional headers to send with each request.
+        :param custom_ca_cert_path: path to a custom CA certificate to use for verifying the server certificate.
+        :param verify: whether to verify the server certificate.
+        :param renew_before: how long before the certificate expires to renew it.
+        :param loop: the event loop to use.
+        """
         self.resotocore_url = url
         self.psk = psk
         self.verify = verify
@@ -69,6 +81,7 @@ class ResotoClient:
             psk=psk,
             session_id=self.session_id,
             get_ssl_context=self.holder.ssl_context if verify else None,
+            additional_headers=additional_headers,
             loop=loop,
         )
 
@@ -92,7 +105,6 @@ class ResotoClient:
         self.holder.shutdown()
 
     def _headers(self) -> Dict[str, str]:
-
         headers = {"Content-type": "application/json", "Accept": "application/json"}
 
         if self.psk:
