@@ -28,7 +28,7 @@ jobs:
         ports:
           - 8529:8529
       resotocore:
-        image: somecr.io/someengineering/resoto:3.3.3
+        image: somecr.io/someengineering/resoto-core:3.3.3
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
         ports:
