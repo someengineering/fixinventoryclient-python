@@ -17,7 +17,7 @@ async def core_client() -> AsyncIterator[ResotoClient]:
     """
 
     # wipe and cleanly import the test model
-    client = ResotoClient("https://resotocore:8900", psk="changeme")
+    client = ResotoClient("https://localhost:8900", psk="changeme")
 
     count = 10
     ready = False

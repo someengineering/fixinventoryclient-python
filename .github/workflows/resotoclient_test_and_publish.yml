@@ -31,7 +31,7 @@ jobs:
         image: somecr.io/someengineering/resotocore:3.3.3
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
-          RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0 resotocore.api.host_certificate.common_name=resotocore resotocore.api.host_certificate.san_dns_names=resotocore"
+          RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
         ports:
           - 8900:8900
 
