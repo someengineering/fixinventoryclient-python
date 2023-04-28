@@ -31,8 +31,9 @@ jobs:
         image: somecr.io/someengineering/resotocore:3.3.3
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
-          RESOTOCORE_GRAPHDB_SERVER: http://localhost:8529
+          RESOTOCORE_GRAPHDB_SERVER: http://arangodb:8529
           RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
+          RESOTOCORE_DEBUG: "true"
         ports:
           - 8900:8900
 
