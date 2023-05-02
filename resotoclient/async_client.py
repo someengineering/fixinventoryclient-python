@@ -49,7 +49,7 @@ class ResotoClient:
         self,
         url: str,
         *,
-        psk: Optional[str],
+        psk: Optional[str] = None,
         additional_headers: Optional[Dict[str, str]] = None,
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
