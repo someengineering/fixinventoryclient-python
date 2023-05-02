@@ -107,15 +107,11 @@ def edge_key(from_node: object, to_node: object, edge_type: str) -> EdgeKey:
 def create_graph(bla_text: str, width: int = 10) -> MultiDiGraph:
     graph = MultiDiGraph()
 
-    def add_edge(
-        from_node: str, to_node: str, edge_type: str = EdgeType.default
-    ) -> None:
+    def add_edge(from_node: str, to_node: str, edge_type: str = EdgeType.default) -> None:
         key = edge_key(from_node, to_node, edge_type)
         graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
 
-    def add_node(
-        uid: str, kind: str, node: Optional[JsObject] = None, replace: bool = False
-    ) -> None:
+    def add_node(uid: str, kind: str, node: Optional[JsObject] = None, replace: bool = False) -> None:
         reported = {**(node if node else to_json(Foo(uid))), "kind": kind}
         graph.add_node(  # type: ignore
             uid,
@@ -149,9 +145,7 @@ def create_graph(bla_text: str, width: int = 10) -> MultiDiGraph:
 def create_multi_collector_graph(width: int = 3) -> MultiDiGraph:
     graph = MultiDiGraph()
 
-    def add_edge(
-        from_node: str, to_node: str, edge_type: str = EdgeType.default
-    ) -> None:
+    def add_edge(from_node: str, to_node: str, edge_type: str = EdgeType.default) -> None:
         key = edge_key(from_node, to_node, edge_type)
         graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
 
@@ -218,6 +212,7 @@ def foo_kinds() -> List[Kind]:
     )
     foo = Kind(
         fqn="foo",
+        aggregate_root=True,
         runtime_kind=None,
         bases=["base"],
         properties=[
@@ -231,6 +226,7 @@ def foo_kinds() -> List[Kind]:
     )
     bla = Kind(
         fqn="bla",
+        aggregate_root=True,
         runtime_kind=None,
         bases=["base"],
         properties=[
@@ -240,11 +236,11 @@ def foo_kinds() -> List[Kind]:
             Property("g", "int32[]"),
         ],
     )
-    cloud = Kind(fqn="cloud", runtime_kind=None, bases=["foo"], properties=[])
-    account = Kind(fqn="account", runtime_kind=None, bases=["foo"], properties=[])
-    region = Kind(fqn="region", runtime_kind=None, bases=["foo"], properties=[])
-    parent = Kind(fqn="parent", runtime_kind=None, bases=["foo"], properties=[])
-    child = Kind(fqn="child", runtime_kind=None, bases=["foo"], properties=[])
+    cloud = Kind(fqn="cloud", runtime_kind=None, bases=["foo"], properties=[], aggregate_root=True)
+    account = Kind(fqn="account", runtime_kind=None, bases=["foo"], properties=[], aggregate_root=True)
+    region = Kind(fqn="region", runtime_kind=None, bases=["foo"], properties=[], aggregate_root=True)
+    parent = Kind(fqn="parent", runtime_kind=None, bases=["foo"], properties=[], aggregate_root=True)
+    child = Kind(fqn="child", runtime_kind=None, bases=["foo"], properties=[], aggregate_root=True)
     return [base, foo, bla, cloud, account, region, parent, child]
 
 
@@ -253,6 +249,4 @@ def to_json(obj: BaseResource) -> Dict[str, Any]:
 
 
 def rnd_str(str_len: int = 10) -> str:
-    return "".join(
-        random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len)
-    )
+    return "".join(random.choice(string.ascii_uppercase + string.digits) for _ in range(str_len))

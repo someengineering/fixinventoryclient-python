@@ -22,15 +22,17 @@ jobs:
         working-directory: ./
     services:
       arangodb:
-        image: arangodb:3.8.3
+        image: arangodb:3.10.5
         env:
           ARANGO_NO_AUTH: 1
         ports:
           - 8529:8529
       resotocore:
-        image: somecr.io/someengineering/resoto:2.1.0
+        image: somecr.io/someengineering/resotocore:3.3.3
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true
+          RESOTOCORE_GRAPHDB_SERVER: http://arangodb:8529
+          RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
         ports:
           - 8900:8900
 
@@ -53,6 +55,8 @@ jobs:
         run: |
           python -m pip install --upgrade pip poetry nox nox-poetry
           poetry install
+      - name: Dump docker logs
+        uses: jwalton/gh-docker-logs@v2
       - name: Run nox
         env:
           RESOTOCORE_ANALYTICS_OPT_OUT: true

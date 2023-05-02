@@ -28,17 +28,19 @@ class AioHttpClient(AsyncHttpClient):
     def __init__(
         self,
         url: str,
+        *,
         psk: Optional[str],
+        additional_headers: Optional[Dict[str, str]] = None,
         session_id: str,
         get_ssl_context: Optional[Callable[[], Awaitable[ssl.SSLContext]]] = None,
         loop: Optional[AbstractEventLoop] = None,
     ):
-
         self.session = aiohttp.ClientSession(loop=loop)
         self.url = url
         self.psk = psk
         self.get_ssl_context = get_ssl_context
         self.session_id = session_id
+        self.additional_headers = additional_headers or {}
 
     async def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
         if self.get_ssl_context:
@@ -53,14 +55,16 @@ class AioHttpClient(AsyncHttpClient):
         return {"session_id": self.session_id}
 
     def _default_headers(self) -> CIMultiDict[str]:
+        # default headers sent for every request
         default_headers = {
             "Content-type": "application/json",
             "Accept": "application/json",
         }
-
+        # add auth header if psk is set
         if self.psk:
             encode_jwt_to_headers(default_headers, {}, self.psk)
-
+        # set all user defined headers
+        default_headers.update(self.additional_headers)
         return CIMultiDict(default_headers)
 
     async def lines(self, response: aiohttp.ClientResponse) -> AsyncIterator[bytes]:

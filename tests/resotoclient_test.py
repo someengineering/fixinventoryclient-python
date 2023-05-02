@@ -4,7 +4,7 @@ from typing import List, AsyncIterator
 import pytest
 from pytest import fixture
 
-from aiohttp import ClientSession 
+from aiohttp import ClientSession
 import time
 
 # noinspection PyUnresolvedReferences
@@ -62,7 +62,7 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[ResotoClient]:
                 raise AssertionError("Resotocore does not came up as expected")
 
     # wipe and cleanly import the test model
-    client = ResotoClient("https://localhost:8900", "changeme")
+    client = ResotoClient("https://localhost:8900", psk="changeme")
 
     # chech that connection is possible
     list(client.cli_execute("system info"))
@@ -84,7 +84,6 @@ def test_system_api(core_client: ResotoClient) -> None:
 
 
 def test_model_api(core_client: ResotoClient) -> None:
-
     # PATCH /model
     string_kind: rc.Kind = rc.Kind(fqn="only_three", runtime_kind="string", properties=None, bases=None)
     setattr(string_kind, "min_length", 3)
@@ -261,7 +260,7 @@ def test_cli(core_client: ResotoClient) -> None:
     parsed, to_execute = result[0]
     assert len(parsed.commands) == 2
     assert (parsed.commands[0].cmd, parsed.commands[1].cmd) == ("search", "count")
-    assert len(to_execute) == 2
+    assert len(to_execute) == 3
     assert (to_execute[0].get("cmd"), to_execute[1].get("cmd")) == (
         "execute_search",
         "aggregate_to_count",
