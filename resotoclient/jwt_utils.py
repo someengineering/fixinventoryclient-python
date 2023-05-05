@@ -57,7 +57,7 @@ def encode_jwt_to_headers(
 def jwt_expiration(auth_header: str) -> Optional[datetime]:
     with suppress(Exception):
         encoded_jwt = auth_header.split(" ")[1]
-        data = jwt.decode(encoded_jwt, options={"verify_signature": False})
+        data = jwt.decode(encoded_jwt, options={"verify_signature": False})  # type: ignore
         if exp := data.get("exp"):
             return datetime.fromtimestamp(exp, timezone.utc)
     return None

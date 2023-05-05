@@ -8,7 +8,7 @@ from aiohttp import WSMsgType
 
 from resotoclient.http_client import AsyncHttpClient
 from resotoclient.http_client import HttpResponse
-from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable
+from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable, Any
 from resotoclient.models import JsValue, JsObject
 from resotoclient.jwt_utils import encode_jwt_to_headers, jwt_expiration
 import aiohttp
@@ -44,7 +44,7 @@ class AioHttpClient(AsyncHttpClient):
         self.session_id = session_id
         self.renew_auth_token_before = renew_auth_token_before
         self.additional_headers = additional_headers or {}
-        self.renew_auth_task: Optional[asyncio.Task] = None
+        self.renew_auth_task: Optional[asyncio.Task[Any]] = None
 
     async def start(self) -> None:
         if "Authorization" in self.additional_headers:
