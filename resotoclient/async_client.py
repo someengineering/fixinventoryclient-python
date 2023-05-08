@@ -53,7 +53,8 @@ class ResotoClient:
         additional_headers: Optional[Dict[str, str]] = None,
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
-        renew_before: timedelta = timedelta(days=1),
+        renew_certificate_before: timedelta = timedelta(days=1),
+        renew_auth_token_before: timedelta = timedelta(minutes=5),
         loop: Optional[AbstractEventLoop] = None,
     ):
         """
@@ -63,7 +64,8 @@ class ResotoClient:
         :param additional_headers: additional headers to send with each request.
         :param custom_ca_cert_path: path to a custom CA certificate to use for verifying the server certificate.
         :param verify: whether to verify the server certificate.
-        :param renew_before: how long before the certificate expires to renew it.
+        :param renew_certificate_before: how long before the certificate expires to renew it.
+        :param renew_auth_token_before: how long before the auth token expires to renew it.
         :param loop: the event loop to use.
         """
         self.resotocore_url = url
@@ -74,7 +76,7 @@ class ResotoClient:
             resotocore_url=url,
             psk=psk,
             custom_ca_cert_path=custom_ca_cert_path,
-            renew_before=renew_before,
+            renew_before=renew_certificate_before,
         )
         self.http_client = AioHttpClient(
             url=url,
@@ -82,6 +84,7 @@ class ResotoClient:
             session_id=self.session_id,
             get_ssl_context=self.holder.ssl_context if verify else None,
             additional_headers=additional_headers,
+            renew_auth_token_before=renew_auth_token_before,
             loop=loop,
         )
 
@@ -98,10 +101,11 @@ class ResotoClient:
         await self.shutdown()
 
     async def start(self) -> None:
+        await self.http_client.start()
         await self.holder.start()
 
     async def shutdown(self) -> None:
-        await self.http_client.close()
+        await self.http_client.shutdown()
         self.holder.shutdown()
 
     def _headers(self) -> Dict[str, str]:

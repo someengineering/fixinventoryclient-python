@@ -2,14 +2,15 @@ import asyncio
 import json
 import logging
 from contextlib import asynccontextmanager, suppress
+from datetime import datetime, timedelta, timezone
 
 from aiohttp import WSMsgType
 
 from resotoclient.http_client import AsyncHttpClient
 from resotoclient.http_client import HttpResponse
-from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable
+from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable, Any
 from resotoclient.models import JsValue, JsObject
-from resotoclient.jwt_utils import encode_jwt_to_headers
+from resotoclient.jwt_utils import encode_jwt_to_headers, jwt_expiration
 import aiohttp
 import ssl
 from yarl import URL
@@ -32,6 +33,7 @@ class AioHttpClient(AsyncHttpClient):
         psk: Optional[str],
         additional_headers: Optional[Dict[str, str]] = None,
         session_id: str,
+        renew_auth_token_before: timedelta,
         get_ssl_context: Optional[Callable[[], Awaitable[ssl.SSLContext]]] = None,
         loop: Optional[AbstractEventLoop] = None,
     ):
@@ -40,7 +42,41 @@ class AioHttpClient(AsyncHttpClient):
         self.psk = psk
         self.get_ssl_context = get_ssl_context
         self.session_id = session_id
+        self.renew_auth_token_before = renew_auth_token_before
         self.additional_headers = additional_headers or {}
+        self.renew_auth_task: Optional[asyncio.Task[Any]] = None
+
+    async def start(self) -> None:
+        if "Authorization" in self.additional_headers:
+            self.renew_auth_task = asyncio.create_task(self.__schedule_renew_auth_token())
+
+    async def shutdown(self) -> None:
+        await self.close()
+        if self.renew_auth_task is not None:
+            self.renew_auth_task.cancel()
+            with suppress(asyncio.CancelledError):
+                await self.renew_auth_task
+
+    async def __schedule_renew_auth_token(self) -> None:
+        while True:
+            # get the expiration time of the current token, fallback to now
+            exp = jwt_expiration(self.additional_headers.get("Authorization", "")) or datetime.now(timezone.utc)
+            # next run is shortly before expiration, but at least 10 seconds away
+            next_run_in = max((exp - self.renew_auth_token_before) - datetime.now(timezone.utc), timedelta(seconds=10))
+            log.debug(f"Renew auth token in {next_run_in}. Going to sleep.")
+            # wait until the token should be renewed
+            await asyncio.sleep(next_run_in.total_seconds())
+            # renew the token
+            try:
+                response = await self.get("/authorization/renew")
+                if response.status_code == 200 and "Authorization" in response.headers:
+                    log.debug("Successfully renewed auth token. Replace Authorization header.")
+                    self.additional_headers["Authorization"] = response.headers["Authorization"]
+                else:
+                    # will be retried in 10 seconds. By default, we start 5 minutes before expiration - 12 attempts.
+                    log.error(f"Failed to renew auth token: {response.status_code} {await response.text()}")
+            except Exception as e:
+                log.error(f"Failed to renew auth token: {e}")
 
     async def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
         if self.get_ssl_context:
@@ -100,7 +136,9 @@ class AioHttpClient(AsyncHttpClient):
         if stream:
             request_headers.update({"Accept": "application/x-ndjson"})
         request_headers.update(headers or {})
-        resp = await self.session.get(url, ssl=await self._ssl_context(), headers=request_headers)
+        resp = await self.session.get(
+            url, ssl=await self._ssl_context(), headers=request_headers, allow_redirects=False
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -150,6 +188,7 @@ class AioHttpClient(AsyncHttpClient):
             headers=request_headers,
             json=json,
             data=data,
+            allow_redirects=False,
         )
 
         return HttpResponse(
@@ -178,7 +217,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        resp = await self.session.put(url, ssl=await self._ssl_context(), headers=request_headers, json=json)
+        resp = await self.session.put(
+            url, ssl=await self._ssl_context(), headers=request_headers, json=json, allow_redirects=False
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -204,7 +245,9 @@ class AioHttpClient(AsyncHttpClient):
 
         request_headers = self._default_headers()
 
-        resp = await self.session.patch(url, ssl=await self._ssl_context(), headers=request_headers, json=json)
+        resp = await self.session.patch(
+            url, ssl=await self._ssl_context(), headers=request_headers, json=json, allow_redirects=False
+        )
 
         return HttpResponse(
             status_code=resp.status,
@@ -230,7 +273,9 @@ class AioHttpClient(AsyncHttpClient):
         query_params.update(params or {})
         url = URL(self.url).with_path(path).with_query(query_params)
         request_headers = self._default_headers()
-        resp = await self.session.delete(url, ssl=await self._ssl_context(), headers=request_headers)
+        resp = await self.session.delete(
+            url, ssl=await self._ssl_context(), headers=request_headers, allow_redirects=False
+        )
 
         return HttpResponse(
             status_code=resp.status,

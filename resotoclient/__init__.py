@@ -115,14 +115,16 @@ class ResotoClient:
         additional_headers: Optional[Dict[str, str]] = None,
         custom_ca_cert_path: Optional[str] = None,
         verify: bool = True,
-        renew_before: timedelta = timedelta(days=1),
+        renew_certificate_before: timedelta = timedelta(days=1),
+        renew_auth_token_before: timedelta = timedelta(minutes=5),
     ):
         self.resotocore_url = url
         self.psk = psk
         self.additional_headers = additional_headers
         self.custom_ca_cert_path = custom_ca_cert_path
         self.verify = verify
-        self.renew_before = renew_before
+        self.renew_certificate_before = renew_certificate_before
+        self.renew_auth_token_before = renew_auth_token_before
         self.event_loop_thread = EventLoopThread()
         self.event_loop_thread.daemon = True
         atexit.register(self.shutdown)
@@ -161,7 +163,8 @@ class ResotoClient:
                 additional_headers=self.additional_headers,
                 custom_ca_cert_path=self.custom_ca_cert_path,
                 verify=self.verify,
-                renew_before=self.renew_before,
+                renew_certificate_before=self.renew_certificate_before,
+                renew_auth_token_before=self.renew_auth_token_before,
                 loop=self.event_loop_thread.loop,
             )
 
