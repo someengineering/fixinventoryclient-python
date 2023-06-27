@@ -23,6 +23,7 @@ class Property:
     required: bool = False
     description: Optional[str] = None
     synthetic: Optional[JsObject] = None
+    metadata: Optional[JsObject] = None
 
 
 @dataclass
@@ -33,6 +34,7 @@ class Kind:
     bases: Optional[List[str]]
     aggregate_root: Optional[bool] = False
     successor_kinds: Optional[Dict[str, List[str]]] = None
+    metadata: Optional[JsObject] = None
 
 
 @dataclass
