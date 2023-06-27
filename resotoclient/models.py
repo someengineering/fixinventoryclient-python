@@ -3,16 +3,7 @@ from typing import List, Optional, Mapping, Sequence, Union, Dict
 from datetime import timedelta
 from enum import Enum
 
-JsValue = Union[
-    Mapping[str, "JsValue"],
-    Sequence["JsValue"],
-    int,
-    float,
-    bool,
-    str,
-    None,
-]
-
+JsValue = Union[None, int, str, float, bool, Sequence["JsValue"], Mapping[str, "JsValue"]]
 JsObject = Mapping[str, JsValue]
 
 

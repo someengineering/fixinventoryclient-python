@@ -1,4 +1,4 @@
-from typing import Optional, Type, TypeVar
+from typing import Optional, Type, TypeVar, Any
 import jsons
 import json
 
@@ -27,3 +27,11 @@ def json_dump(
     cls: Optional[type] = None,
 ) -> JsValue:
     return jsons.dump(obj, cls)  # type: ignore
+
+
+def __identity(obj: JsValue, *args: Any, **kwargs: Any) -> JsValue:
+    return obj
+
+
+jsons.set_serializer(__identity, JsValue)
+jsons.set_deserializer(__identity, JsValue)
