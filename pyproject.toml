@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "resotoclient"
-version = "1.5.0"
+version = "1.5.1"
 description = "Resoto Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
