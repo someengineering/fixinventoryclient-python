@@ -457,14 +457,14 @@ class ResotoClient:
         nodes = [extract_node(node) for node in iter]
         return pd.json_normalize(nodes)  # type: ignore
 
-    def graphviz(
+    def graphviz(  # type: ignore
         self,
         search: str,
         section: Optional[str] = "reported",
         graph: str = "resoto",
         engine: str = "sfdp",
         format: str = "svg",
-    ) -> Digraph:  # type: ignore
+    ) -> Digraph:   # type: ignore
         if Digraph is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
 
