@@ -74,7 +74,7 @@ class AioHttpClient(AsyncHttpClient):
                     self.additional_headers["Authorization"] = response.headers["Authorization"]
                 else:
                     # will be retried in 10 seconds. By default, we start 5 minutes before expiration - 12 attempts.
-                    log.error(f"Failed to renew auth token: {response.status_code} {await response.text()}")
+                    log.warning(f"Failed to renew auth token: {response.status_code} {await response.text()}")
             except Exception as e:
                 log.error(f"Failed to renew auth token: {e}")
 

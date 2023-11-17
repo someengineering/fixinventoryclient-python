@@ -87,16 +87,16 @@ async def load_cert_from_core(
     try:
         ca_cert = await get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
     except FingerprintError as e:
-        log.fatal(f"{e}, MITM attack?")
+        log.error(f"{e}, MITM attack?")
         raise
     except InvalidSignatureError as e:
-        log.fatal(f"{e}, wrong PSK?")
+        log.error(f"{e}, wrong PSK?")
         raise
     except NoJWTError as e:
-        log.fatal(f"{e}, resotocore started without PSK?")
+        log.warning(f"{e}, resotocore started without PSK?")
         raise
     except Exception as e:
-        log.fatal(f"{e}")
+        log.info(f"Got an exception: {e}")
         raise
     return ca_cert
 
