@@ -7,14 +7,12 @@ from typing import (
     Optional,
     List,
     Tuple,
-    Sequence,
     Mapping,
     Type,
     AsyncIterator,
     TypeVar,
     Awaitable,
     Callable,
-    cast,
 )
 from types import TracebackType
 from resotoclient.models import (
@@ -246,7 +244,7 @@ class ResotoClient:
     def delete_node(self, node_id: str, graph: str = "resoto") -> None:
         return self._await(lambda c: c.delete_node(node_id, graph))
 
-    def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
+    def patch_nodes(self, nodes: List[JsObject], graph: str = "resoto") -> List[JsObject]:
         return self._await(lambda c: c.patch_nodes(nodes, graph))
 
     def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
@@ -404,7 +402,7 @@ class ResotoClient:
 
         def extract_node(node: JsObject) -> Optional[JsObject]:
             node_data = node
-            if not isinstance(node_data, dict):
+            if not node_data:
                 return None
             if aggregate_search:
                 if flatten and "group" in node_data and isinstance(node_data["group"], dict):
@@ -416,7 +414,7 @@ class ResotoClient:
                 if flatten:
                     if not "reported" in node or not isinstance(node["reported"], dict):
                         return None
-                    node_data = cast(Dict[str, Any], node["reported"])
+                    node_data = node["reported"]
                     for k, v in node.items():
                         if isinstance(v, dict) and k != "reported":
                             node_data[k] = v
