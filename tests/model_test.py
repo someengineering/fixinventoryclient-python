@@ -1,5 +1,17 @@
+from typing import Any
+
+import jsons
+
 from resotoclient.json_utils import json_dump, json_load
-from resotoclient.models import Property, Kind
+from resotoclient.models import Property, Kind, JsValue
+
+
+def __identity(obj: JsValue, *args: Any, **kwargs: Any) -> JsValue:
+    return obj
+
+
+jsons.set_serializer(__identity, JsValue)
+jsons.set_deserializer(__identity, JsValue)
 
 
 def test_prop_js_roundtrip() -> None:

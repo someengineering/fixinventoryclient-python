@@ -39,7 +39,7 @@ async def core_client() -> AsyncIterator[ResotoClient]:
 async def test_listen_to_events(core_client: ResotoClient) -> None:
     received: List[JsObject] = []
     send_queue: Queue[JsObject] = Queue()
-    messages = [dict(kind="event", message_type="test", data={"foo": i}) for i in range(5)]
+    messages: List[JsObject] = [dict(kind="event", message_type="test", data={"foo": i}) for i in range(5)]
     for msg in messages:
         # add some messages that should be ignored - we are only listening for test events
         await send_queue.put(dict(kind="event", message_type="ignore_me"))

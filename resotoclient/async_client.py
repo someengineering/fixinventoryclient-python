@@ -9,7 +9,6 @@ from typing import (
     Optional,
     List,
     Tuple,
-    Sequence,
     Type,
 )
 from types import TracebackType
@@ -223,7 +222,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def patch_nodes(self, nodes: Sequence[JsObject], graph: str = "resoto") -> List[JsObject]:
+    async def patch_nodes(self, nodes: List[JsObject], graph: str = "resoto") -> List[JsObject]:
         response = await self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
