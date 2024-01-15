@@ -8,13 +8,13 @@ from aiohttp import WSMsgType
 
 from resotoclient.http_client import AsyncHttpClient
 from resotoclient.http_client import HttpResponse
-from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable, Any
+from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable, Any, Literal
 from resotoclient.models import JsValue, JsObject
 from resotoclient.jwt_utils import encode_jwt_to_headers, jwt_expiration
 import aiohttp
 import ssl
 from yarl import URL
-from asyncio import AbstractEventLoop, Queue
+from asyncio import AbstractEventLoop, Queue, Task, Future
 from multidict import CIMultiDict
 
 log = logging.getLogger(__name__)
@@ -78,7 +78,7 @@ class AioHttpClient(AsyncHttpClient):
             except Exception as e:
                 log.error(f"Failed to renew auth token: {e}")
 
-    async def _ssl_context(self) -> Union[ssl.SSLContext, bool]:
+    async def _ssl_context(self) -> Union[ssl.SSLContext, Literal[False]]:
         if self.get_ssl_context:
             return await self.get_ssl_context()
         else:
@@ -295,7 +295,7 @@ class AioHttpClient(AsyncHttpClient):
         params: Optional[Dict[str, str]] = None,
         send_queue: Optional[Queue[Union[str, JsObject]]] = None,
     ) -> AsyncIterator[Queue[Union[str, PoisonPill]]]:
-        async with self.session.ws_connect(  # type: ignore
+        async with self.session.ws_connect(
             URL(self.url).with_path(path).with_query(params or {}),
             headers=self._default_headers(),
             ssl=await self._ssl_context(),
@@ -305,10 +305,10 @@ class AioHttpClient(AsyncHttpClient):
             async def receive() -> None:
                 try:
                     async for msg in ws:
-                        if msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSED):  # type: ignore
+                        if msg.type in (WSMsgType.ERROR, WSMsgType.CLOSE, WSMsgType.CLOSED):
                             break
-                        elif msg.type == WSMsgType.TEXT and len(msg.data.strip()) > 0:  # type: ignore
-                            await out_queue.put(msg.data)  # type: ignore
+                        elif msg.type == WSMsgType.TEXT and len(msg.data.strip()) > 0:
+                            await out_queue.put(msg.data)
                 except Exception as ex:
                     # do not allow any exception - it will destroy the async fiber and cleanup
                     log.info(f"Receive: Exception during receive: {ex}. Hang up.")
@@ -320,7 +320,7 @@ class AioHttpClient(AsyncHttpClient):
                     while True:
                         elem = await queue.get()
                         str_elem = json.dumps(elem) if isinstance(elem, dict) else elem
-                        await ws.send_str(str_elem + "\n")  # type: ignore
+                        await ws.send_str(str_elem + "\n")
                 except Exception as ex:
                     # do not allow any exception - it will destroy the async fiber and cleanup
                     log.info(f"Send: Exception during send: {ex}. Hang up.")
@@ -328,7 +328,9 @@ class AioHttpClient(AsyncHttpClient):
                     await close_ws()
 
             rt = asyncio.create_task(receive())
-            to_wait = asyncio.gather(rt, asyncio.create_task(send(send_queue))) if send_queue is not None else rt
+            to_wait: Union[Future[Any], Task[Any]] = (
+                asyncio.gather(rt, asyncio.create_task(send(send_queue))) if send_queue is not None else rt
+            )
 
             async def close_ws() -> None:
                 await out_queue.put(PoisonPill())

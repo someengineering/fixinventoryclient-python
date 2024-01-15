@@ -24,11 +24,11 @@ class EventLoopThread(threading.Thread):
     """
 
     def __init__(self, *args: Any, **kwargs: Dict[str, Any]):
-        super().__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)  # type: ignore
         self.loop = asyncio.new_event_loop()
         self.running = False
 
-    def run(self):
+    def run(self) -> None:
         self.running = True
         self.loop.run_forever()
 
@@ -38,7 +38,7 @@ class EventLoopThread(threading.Thread):
         """
         return asyncio.run_coroutine_threadsafe(coroutine, loop=self.loop).result()
 
-    def stop(self):
+    def stop(self) -> None:
         self.loop.call_soon_threadsafe(self.loop.stop)
         self.join()
         self.running = False

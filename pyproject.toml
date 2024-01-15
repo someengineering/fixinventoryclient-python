@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "resotoclient"
-version = "1.6.1"
+version = "1.6.2"
 description = "Resoto Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
@@ -35,12 +35,12 @@ Changelog = "https://github.com/someengineering/resotoclient-python/releases"
 
 [tool.poetry.dependencies]
 python = "^3.9"
-jsons="^1.6.1"
-PyJWT="^2.3.0"
+jsons=">=1.6.1"
+PyJWT=">=2.3.0"
 cryptography=">=36.0.2"
-pandas = { version = "^1.4.2", optional = true }
-graphviz = { version = "^0.20", optional = true }
-aiohttp = "^3.8.1"
+pandas = { version = ">=1.4.2", optional = true }
+graphviz = { version = ">=0.20", optional = true }
+aiohttp = ">=3.8.1"
 certifi = ">=2017.4.17"
 
 
@@ -48,20 +48,19 @@ certifi = ">=2017.4.17"
 extras = ["pandas", "graphviz"]
 
 [tool.poetry.dev-dependencies]
-pytest = "^7.3.1"
-safety = "^2.3.5"
-pyright = "^1.1.304"
-flake8 = "^6.0.0"
+pytest = ">=7.3.1"
+safety = ">=2.3.5"
+pyright = ">=1.1.304"
+flake8 = ">=6.0.0"
 black = ">=22.12.0"
-flake8-bandit = "^4.1.1"
-flake8-bugbear = "^23.3.23"
-pep8-naming = "^0.13.3"
-networkx = "^2.8"
-six = "^1.16.0"
-urllib3 = "^1.26.15" # poetry itself stopped working with latest urllib3
+flake8-bandit = ">=4.1.1"
+flake8-bugbear = ">=23.3.23"
+pep8-naming = ">=0.13.3"
+networkx = ">=2.8"
+six = ">=1.16.0"
 
 [tool.poetry.group.dev.dependencies]
-pytest-asyncio = "^0.19.0"
+pytest-asyncio = ">=0.19.0"
 
 [tool.pyright]
 include = ["resotoclient", "tests"]
