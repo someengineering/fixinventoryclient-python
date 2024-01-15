@@ -1,5 +1,7 @@
 import json
 import logging
+
+from resotoclient.http_client import HttpResponse
 from resotoclient.jwt_utils import encode_jwt_to_headers
 from typing import (
     Any,
@@ -27,7 +29,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from resotoclient.http_client.aiohttp_client import AioHttpClient, HttpResponse, PoisonPill
+from resotoclient.http_client.aiohttp_client import AioHttpClient, PoisonPill
 import random
 import string
 from datetime import timedelta
@@ -173,7 +175,7 @@ class ResotoClient:
     async def create_graph(self, name: str) -> JsObject:
         response = await self._post(f"/graph/{name}")
         # root node
-        return await response.json()
+        return await response.json()  # type: ignore
 
     async def delete_graph(self, name: str, truncate: bool = False) -> str:
         props = {"truncate": "true"} if truncate else {}
@@ -187,7 +189,7 @@ class ResotoClient:
             json=node,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -204,14 +206,14 @@ class ResotoClient:
             json=node,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
     async def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
         response = await self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -228,7 +230,7 @@ class ResotoClient:
             json=nodes,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -264,7 +266,7 @@ class ResotoClient:
             f"/graph/{graph}/batch",
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -292,7 +294,7 @@ class ResotoClient:
             data=search,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -309,7 +311,7 @@ class ResotoClient:
     async def search_list(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> AsyncIterator[JsObject]:
-        params = {}
+        params: Dict[str, str] = {}
         if section:
             params["section"] = section
 
@@ -323,7 +325,7 @@ class ResotoClient:
     async def search_graph(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> AsyncIterator[JsObject]:
-        params = {}
+        params: Dict[str, str] = {}
         if section:
             params["section"] = section
         response = await self._post(f"/graph/{graph}/search/graph", params=params, data=search, stream=True)
@@ -336,7 +338,7 @@ class ResotoClient:
     async def search_aggregate(
         self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
     ) -> AsyncIterator[JsObject]:
-        params = {}
+        params: Dict[str, str] = {}
         if section:
             params["section"] = section
         response = await self._post(f"/graph/{graph}/search/aggregate", params=params, data=search, stream=True)
@@ -521,7 +523,7 @@ class ResotoClient:
     async def cli_info(self) -> JsObject:
         response = await self._get("/cli/info")
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -538,7 +540,7 @@ class ResotoClient:
             f"/config/{config_id}",
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -550,7 +552,7 @@ class ResotoClient:
             params=params,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
@@ -560,7 +562,7 @@ class ResotoClient:
             json=json,
         )
         if response.status_code == 200:
-            return await response.json()
+            return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 

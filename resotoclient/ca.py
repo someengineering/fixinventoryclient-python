@@ -69,7 +69,7 @@ def ca_bundle(
     f.write(f"# Issuer: {cert.issuer.rfc4514_string()}\n")
     f.write(f"# Subject: {cert.subject.rfc4514_string()}\n")
     label = cert.issuer.get_attributes_for_oid(NameOID.COMMON_NAME)[0].value
-    f.write(f"# Label: {label}\n")
+    f.write(f"# Label: {label}\n")  # type: ignore
     f.write(f"# Serial: {cert.serial_number}\n")
     md5 = cert_fingerprint(cert, "MD5")
     sha1 = cert_fingerprint(cert, "SHA1")
@@ -119,9 +119,9 @@ class CertificatesHolder:
     ) -> None:
         self.resotocore_url = resotocore_url
         self.psk = psk
-        self.__ca_cert = None
+        self.__ca_cert: Optional[Certificate] = None
         self.__custom_ca_cert_path = custom_ca_cert_path
-        self.__ssl_context = None
+        self.__ssl_context: Optional[SSLContext] = None
         self.__renew_before = renew_before
         self.__watcher = Thread(
             target=self.__certificates_watcher, name="certificates_watcher", daemon=True

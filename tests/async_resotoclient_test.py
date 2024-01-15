@@ -1,10 +1,10 @@
 import time
 from asyncio import Queue
-from typing import List, AsyncIterator
+from typing import List, AsyncIterator, Union
 
 from pytest import fixture, mark
 
-from resotoclient import JsObject
+from resotoclient import JsObject  # type: ignore
 from resotoclient.async_client import ResotoClient
 
 
@@ -20,7 +20,7 @@ async def core_client() -> AsyncIterator[ResotoClient]:
     client = ResotoClient("https://localhost:8900", psk="changeme")
 
     count = 10
-    ready = False
+    ready: Union[bool, str] = False
     while not ready:
         time.sleep(0.5)
         try:

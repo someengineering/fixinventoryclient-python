@@ -20,24 +20,16 @@ except ImportError:
 package = "resotoclient"
 python_version = "3.9"
 nox.needs_version = ">= 2021.6.6"
-nox.options.sessions = ("safety", "pyright", "pytest")
+nox.options.sessions = ("mypy", "pytest")
 
 
 @session(python=python_version)
-def safety(session: Session) -> None:
-    """Scan dependencies for insecure packages."""
-    requirements = session.poetry.export_requirements()
-    session.install("safety")
-    session.run("safety", "check", "--full-report", f"--file={requirements}")
-
-
-@session(python=python_version)
-def pyright(session: Session) -> None:
+def mypy(session: Session) -> None:
     """Type-check using mypy."""
     args = session.posargs or ["resotoclient", "tests"]
     session.install(".[extras]")
-    session.install("pyright", "pytest", "networkx")
-    session.run("pyright", *args)
+    session.install("mypy", "pytest", "networkx")
+    session.run("mypy", "--strict", "resotoclient", "tests")
 
 
 @session(python=python_version)

@@ -8,25 +8,21 @@ from aiohttp import ClientSession
 import time
 
 # noinspection PyUnresolvedReferences
-from tests import (
-    foo_kinds,  # type: ignore
-    create_graph,
-    rnd_str,
-)
+from tests import foo_kinds, create_graph, rnd_str
 from resotoclient import ResotoClient
 from resotoclient import models as rc
 from networkx import MultiDiGraph
 
 
 def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
-    ga: List[rc.JsObject] = [{**node, "type": "node"} for _, node in graph.nodes(data=True)]  # type: ignore
-    for from_node, to_node, data in graph.edges(data=True):  # type: ignore
+    ga: List[rc.JsObject] = [{**node, "type": "node"} for _, node in graph.nodes(data=True)]
+    for from_node, to_node, data in graph.edges(data=True):
         ga.append(
-            {  # type: ignore
+            {
                 "type": "edge",
                 "from": from_node,
                 "to": to_node,
-                "edge_type": data["edge_type"],  # type: ignore
+                "edge_type": data["edge_type"],
             }
         )
     return ga
@@ -113,7 +109,7 @@ def test_graph_api(core_client: ResotoClient) -> None:
     assert g in graphs
 
     # get one specific graph
-    graph = core_client.get_graph(g) or {}  # type: ignore
+    graph = core_client.get_graph(g) or {}
     assert graph["id"] == "root"
     assert graph["reported"]["kind"] == "graph_root"  # type: ignore
 
@@ -166,9 +162,8 @@ def test_graph_api(core_client: ResotoClient) -> None:
     core_client.abort_batch(batch2_id, g)
 
     # update nodes
-    update: List[rc.JsObject] = [  # type: ignore
-        {"id": node["id"], "reported": {"name": "bruce"}}  # type: ignore
-        for _, node in create_graph("foo").nodes(data=True)  # type: ignore
+    update: List[rc.JsObject] = [
+        {"id": node["id"], "reported": {"name": "bruce"}} for _, node in create_graph("foo").nodes(data=True)
     ]
     updated_nodes = core_client.patch_nodes(update, g)
     assert len(updated_nodes) == 113

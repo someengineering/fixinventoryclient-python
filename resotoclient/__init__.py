@@ -41,12 +41,12 @@ from collections import defaultdict
 from attrs import define
 
 try:
-    from pandas import DataFrame  # type: ignore
-    import pandas as pd  # type: ignore
+    from pandas import DataFrame
+    import pandas as pd
 except ImportError:
     DataFrame = None
 try:
-    from graphviz import Digraph  # type: ignore
+    from graphviz import Digraph
 except ImportError:
     Digraph = None
 
@@ -130,7 +130,7 @@ class ResotoClient:
         self.state_lock = threading.Lock()
         self.client_state = ClientState.INITIALIZED
 
-        self.async_client = None
+        self.async_client: Optional[AsyncResotoClient] = None
 
     def __enter__(self) -> "ResotoClient":
         self.start()
@@ -389,7 +389,9 @@ class ResotoClient:
     def ready(self) -> str:
         return self._await(lambda c: c.ready())
 
-    def dataframe(self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True) -> DataFrame:  # type: ignore
+    def dataframe(
+        self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True
+    ) -> DataFrame:
         if DataFrame is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
         aggregate_search = False
@@ -453,24 +455,24 @@ class ResotoClient:
             return node_data
 
         nodes = [extract_node(node) for node in iter]
-        return pd.json_normalize(nodes)  # type: ignore
+        return pd.json_normalize(nodes)
 
-    def graphviz(  # type: ignore
+    def graphviz(
         self,
         search: str,
         section: Optional[str] = "reported",
         graph: str = "resoto",
         engine: str = "sfdp",
         format: str = "svg",
-    ) -> Digraph:   # type: ignore
+    ) -> Digraph:
         if Digraph is None:
             raise ImportError("Python package resotoclient[extras] is not installed")
 
-        digraph = Digraph(comment=search)  # type: ignore
+        digraph = Digraph(comment=search)
         digraph.format = format
         digraph.engine = engine
-        digraph.graph_attr = {"rankdir": "LR", "splines": "true", "overlap": "false"}  # type: ignore
-        digraph.node_attr = {  # type: ignore
+        digraph.graph_attr = {"rankdir": "LR", "splines": "true", "overlap": "false"}
+        digraph.node_attr = {
             "shape": "plain",
             "colorscheme": "paired12",
         }
@@ -490,16 +492,16 @@ class ResotoClient:
                     kind=parse_kind(kind),
                     kind_name=kind,
                 )
-                digraph.node(  # type: ignore
+                digraph.node(
                     name=js_get(elem, ["id"]),
                     # label=rd.name,
                     label=render_resource(rd, color),
                     shape="plain",
                 )
             elif elem.get("type") == "edge":
-                digraph.edge(js_get(elem, ["from"]), js_get(elem, ["to"]))  # type: ignore
+                digraph.edge(js_get(elem, ["from"]), js_get(elem, ["to"]))
 
-        return digraph  # type: ignore
+        return digraph
 
 
 def rnd_str(str_len: int = 10) -> str:

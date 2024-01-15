@@ -36,7 +36,7 @@ def encode_jwt(
     key, salt = key_from_psk(psk)
     salt_encoded = base64.standard_b64encode(salt).decode("utf-8")
     headers.update({"salt": salt_encoded})
-    return jwt.encode(payload, key, algorithm="HS256", headers=headers)  # type: ignore
+    return jwt.encode(payload, key, algorithm="HS256", headers=headers)
 
 
 def encode_jwt_to_headers(
@@ -57,7 +57,7 @@ def encode_jwt_to_headers(
 def jwt_expiration(auth_header: str) -> Optional[datetime]:
     with suppress(Exception):
         encoded_jwt = auth_header.split(" ")[1]
-        data = jwt.decode(encoded_jwt, options={"verify_signature": False})  # type: ignore
+        data = jwt.decode(encoded_jwt, options={"verify_signature": False})
         if exp := data.get("exp"):
             return datetime.fromtimestamp(exp, timezone.utc)
     return None

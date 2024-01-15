@@ -2,8 +2,8 @@ from resotoclient.http_client.event_loop_thread import EventLoopThread
 import asyncio
 
 
-def test_event_loop_thread():
-    async def foo():
+def test_event_loop_thread() -> None:
+    async def foo() -> int:
         await asyncio.sleep(0.1)
         return 42
 

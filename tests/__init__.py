@@ -87,9 +87,9 @@ class Bla(BaseResource):
 def to_js(node: Any, **kwargs: Any) -> JsObject:
     # shortcut: assume a dict is already a json value
     if isinstance(node, dict) and not kwargs.get("force_dict", False):
-        return node  # type: ignore
+        return node
     return jsons.dump(  # type: ignore
-        node,  # type: ignore
+        node,
         strip_privates=True,
         strip_microseconds=True,
         strip_class_variables=True,
@@ -97,7 +97,7 @@ def to_js(node: Any, **kwargs: Any) -> JsObject:
     )
 
 
-EdgeKey = namedtuple("EdgeKey", ["from_node", "to_node", "edge_type"])  # type: ignore
+EdgeKey = namedtuple("EdgeKey", ["from_node", "to_node", "edge_type"])
 
 
 def edge_key(from_node: object, to_node: object, edge_type: str) -> EdgeKey:
@@ -109,11 +109,11 @@ def create_graph(bla_text: str, width: int = 10) -> MultiDiGraph:
 
     def add_edge(from_node: str, to_node: str, edge_type: str = EdgeType.default) -> None:
         key = edge_key(from_node, to_node, edge_type)
-        graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
+        graph.add_edge(from_node, to_node, key, edge_type=edge_type)
 
     def add_node(uid: str, kind: str, node: Optional[JsObject] = None, replace: bool = False) -> None:
         reported = {**(node if node else to_json(Foo(uid))), "kind": kind}
-        graph.add_node(  # type: ignore
+        graph.add_node(
             uid,
             id=uid,
             kinds=[kind],
@@ -147,7 +147,7 @@ def create_multi_collector_graph(width: int = 3) -> MultiDiGraph:
 
     def add_edge(from_node: str, to_node: str, edge_type: str = EdgeType.default) -> None:
         key = edge_key(from_node, to_node, edge_type)
-        graph.add_edge(from_node, to_node, key, edge_type=edge_type)  # type: ignore
+        graph.add_edge(from_node, to_node, key, edge_type=edge_type)
 
     def add_node(node_id: str, kind: str, replace: bool = False) -> str:
         reported = {
@@ -156,7 +156,7 @@ def create_multi_collector_graph(width: int = 3) -> MultiDiGraph:
             "name": node_id,
             "kind": kind,
         }
-        graph.add_node(  # type: ignore
+        graph.add_node(
             node_id,
             id=node_id,
             reported=reported,
