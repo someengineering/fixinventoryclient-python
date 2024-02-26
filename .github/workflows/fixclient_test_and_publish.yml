@@ -4,18 +4,18 @@ on:
     branches:
       - main
     paths:
-      - 'resotoclient/**'
+      - 'fixclient/**'
       - '.github/**'
     tags:
       - "*.*.*"
   pull_request:
     paths:
-      - 'resotoclient/**'
+      - 'fixclient/**'
       - '.github/**'
 
 jobs:
-  resotoclient-test-and-build:
-    name: "Test and build (resotoclient)"
+  fixclient-test-and-build:
+    name: "Test and build (fixclient)"
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -27,12 +27,12 @@ jobs:
           ARANGO_NO_AUTH: 1
         ports:
           - 8529:8529
-      resotocore:
-        image: somecr.io/someengineering/resotocore:3.3.3
+      fixcore:
+        image: somecr.io/someengineering/fixcore:4.0.0
         env:
-          RESOTOCORE_ANALYTICS_OPT_OUT: true
-          RESOTOCORE_GRAPHDB_SERVER: http://arangodb:8529
-          RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
+          FIXCORE_ANALYTICS_OPT_OUT: true
+          FIXCORE_GRAPHDB_SERVER: http://arangodb:8529
+          FIXCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
         ports:
           - 8900:8900
 
@@ -59,7 +59,7 @@ jobs:
         uses: jwalton/gh-docker-logs@v2
       - name: Run nox
         env:
-          RESOTOCORE_ANALYTICS_OPT_OUT: true
+          FIXCORE_ANALYTICS_OPT_OUT: true
         run: nox
       - name: Build a binary wheel and a source tarball
         run: >-
