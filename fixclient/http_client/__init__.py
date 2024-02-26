@@ -1,8 +1,9 @@
 from abc import ABC, abstractmethod
 from typing import Dict, Optional, AsyncIterator, Callable, Awaitable, Mapping, Any, Type
 from attrs import define
-from resotoclient.models import JsValue
+from fixclient.models import JsValue
 from types import TracebackType
+
 
 @define
 class HttpResponse:
@@ -72,9 +73,7 @@ class AsyncHttpClient(ABC):
         pass
 
     @abstractmethod
-    async def put(
-        self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None
-    ) -> HttpResponse:
+    async def put(self, path: str, json: JsValue, params: Optional[Dict[str, str]] = None) -> HttpResponse:
         pass
 
     @abstractmethod

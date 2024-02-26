@@ -17,7 +17,7 @@ except ImportError:
     raise SystemExit(dedent(message)) from None
 
 
-package = "resotoclient"
+package = "fixclient"
 python_version = "3.9"
 nox.needs_version = ">= 2021.6.6"
 nox.options.sessions = ("mypy", "pytest")
@@ -26,10 +26,10 @@ nox.options.sessions = ("mypy", "pytest")
 @session(python=python_version)
 def mypy(session: Session) -> None:
     """Type-check using mypy."""
-    args = session.posargs or ["resotoclient", "tests"]
+    args = session.posargs or ["fixclient", "tests"]
     session.install(".[extras]")
     session.install("mypy", "pytest", "networkx")
-    session.run("mypy", "--strict", "resotoclient", "tests")
+    session.run("mypy", "--strict", "fixclient", "tests")
 
 
 @session(python=python_version)
