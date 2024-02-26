@@ -6,7 +6,7 @@ from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization
 from cryptography.x509.oid import NameOID
-from resotoclient.jwt_utils import decode_jwt_from_headers
+from fixclient.jwt_utils import decode_jwt_from_headers
 from jwt.exceptions import InvalidSignatureError
 import logging
 from logging import Logger
@@ -18,6 +18,7 @@ from ssl import SSLContext, create_default_context, Purpose
 import certifi
 from io import StringIO
 
+
 def load_cert_from_bytes(cert: bytes) -> Certificate:
     return x509.load_pem_x509_certificate(cert, default_backend())
 
@@ -28,19 +29,16 @@ def load_cert_from_file(cert_path: str) -> Certificate:
 
 
 def cert_fingerprint(cert: Certificate, hash_algorithm: str = "SHA256") -> str:
-    return ":".join(
-        f"{b:02X}" for b in cert.fingerprint(getattr(hashes, hash_algorithm.upper())())
-    )
+    return ":".join(f"{b:02X}" for b in cert.fingerprint(getattr(hashes, hash_algorithm.upper())()))
 
 
 # yep, this is an expensive call to make. But we only call it when the certificate
 # needs to be refreshed, which is not happening often, so it is fine here.
-async def get_ca_cert(resotocore_uri: str, psk: Optional[str]) -> Certificate:
+async def get_ca_cert(fixcore_uri: str, psk: Optional[str]) -> Certificate:
     async def do_request() -> Tuple[bytes, Mapping[str, str]]:
         async with aiohttp.ClientSession() as session:
-            async with session.get(f"{resotocore_uri}/ca/cert", ssl=False) as response:
+            async with session.get(f"{fixcore_uri}/ca/cert", ssl=False) as response:
                 return await response.read(), response.headers
-
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -59,9 +57,7 @@ def cert_to_bytes(cert: Certificate) -> bytes:
     return cert.public_bytes(serialization.Encoding.PEM)
 
 
-def ca_bundle(
-    cert: Certificate, include_certifi: bool = True
-) -> str:
+def ca_bundle(cert: Certificate, include_certifi: bool = True) -> str:
     f = StringIO()
     if include_certifi:
         f.write(certifi.contents())
@@ -80,12 +76,11 @@ def ca_bundle(
     f.write(cert_to_bytes(cert).decode("utf-8"))
     return f.getvalue()
 
-async def load_cert_from_core(
-    resotocore_uri: str, psk: Optional[str], log: Logger
-) -> Certificate:
+
+async def load_cert_from_core(fixcore_uri: str, psk: Optional[str], log: Logger) -> Certificate:
     log.debug("Loading CA certificate from core")
     try:
-        ca_cert = await get_ca_cert(resotocore_uri=resotocore_uri, psk=psk)
+        ca_cert = await get_ca_cert(fixcore_uri=fixcore_uri, psk=psk)
     except FingerprintError as e:
         log.error(f"{e}, MITM attack?")
         raise
@@ -93,7 +88,7 @@ async def load_cert_from_core(
         log.error(f"{e}, wrong PSK?")
         raise
     except NoJWTError as e:
-        log.warning(f"{e}, resotocore started without PSK?")
+        log.warning(f"{e}, fixcore started without PSK?")
         raise
     except Exception as e:
         log.info(f"Got an exception: {e}")
@@ -112,25 +107,23 @@ class NoJWTError(Exception):
 class CertificatesHolder:
     def __init__(
         self,
-        resotocore_url: str,
+        fixcore_url: str,
         psk: Optional[str],
         custom_ca_cert_path: Optional[str],
         renew_before: timedelta,
     ) -> None:
-        self.resotocore_url = resotocore_url
+        self.fixcore_url = fixcore_url
         self.psk = psk
         self.__ca_cert: Optional[Certificate] = None
         self.__custom_ca_cert_path = custom_ca_cert_path
         self.__ssl_context: Optional[SSLContext] = None
         self.__renew_before = renew_before
-        self.__watcher = Thread(
-            target=self.__certificates_watcher, name="certificates_watcher", daemon=True
-        )
+        self.__watcher = Thread(target=self.__certificates_watcher, name="certificates_watcher", daemon=True)
         self.__load_lock = Lock()
         self.__loaded = Event()
         self.__exit = Condition()
 
-        self.log = logging.getLogger("resotoclient")
+        self.log = logging.getLogger("fixclient")
 
     async def start(self) -> None:
         await self.load()
@@ -144,14 +137,10 @@ class CertificatesHolder:
     async def load(self) -> None:
         with self.__load_lock:
             if self.__custom_ca_cert_path is not None:
-                self.log.debug(
-                    f"Loading CA certificate from {self.__custom_ca_cert_path}"
-                )
+                self.log.debug(f"Loading CA certificate from {self.__custom_ca_cert_path}")
                 self.__ca_cert = load_cert_from_file(self.__custom_ca_cert_path)
             else:
-                self.__ca_cert = await load_cert_from_core(
-                    self.resotocore_url, self.psk, self.log
-                )
+                self.__ca_cert = await load_cert_from_core(self.fixcore_url, self.psk, self.log)
             ctx = create_default_context(purpose=Purpose.SERVER_AUTH)
             ctx.load_verify_locations(cadata=ca_bundle(self.__ca_cert))
             self.__ssl_context = ctx
@@ -164,19 +153,14 @@ class CertificatesHolder:
     async def ssl_context(self) -> SSLContext:
         if not self.__ssl_context:
             await self.load()
-        return self.__ssl_context # type: ignore
-
+        return self.__ssl_context  # type: ignore
 
     def __certificates_watcher(self) -> None:
         while True:
             with self.__exit:
                 if self.__loaded.is_set():
                     cert = self.__ca_cert
-                    if (
-                        isinstance(cert, Certificate)
-                        and cert.not_valid_after
-                        < datetime.utcnow() - self.__renew_before
-                    ):
+                    if isinstance(cert, Certificate) and cert.not_valid_after < datetime.utcnow() - self.__renew_before:
                         asyncio.run(self.reload())
                 if self.__exit.wait(60):
                     break

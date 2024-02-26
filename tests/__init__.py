@@ -1,4 +1,4 @@
-"""Test suite for the resotoclient package."""
+"""Test suite for the fixclient package."""
 from abc import ABC
 from datetime import date, datetime
 from typing import List, Optional, Set, Any, Dict
@@ -6,7 +6,7 @@ from collections import namedtuple
 
 import pytest
 from networkx import MultiDiGraph
-from resotoclient.models import Kind, Property, JsObject
+from fixclient.models import Kind, Property, JsObject
 
 import random
 import string

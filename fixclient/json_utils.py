@@ -3,7 +3,7 @@ from typing import Optional, Type, TypeVar
 
 import jsons
 
-from resotoclient.models import JsValue
+from fixclient.models import JsValue
 
 T = TypeVar("T")
 
@@ -28,5 +28,3 @@ def json_dump(
     cls: Optional[type] = None,
 ) -> JsValue:
     return jsons.dump(obj, cls)  # type: ignore
-
-

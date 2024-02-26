@@ -15,7 +15,7 @@ from typing import (
     Callable,
 )
 from types import TracebackType
-from resotoclient.models import (
+from fixclient.models import (
     Subscriber,
     Subscription,
     ParsedCommands,
@@ -27,8 +27,8 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from resotoclient.async_client import ResotoClient as AsyncResotoClient
-from resotoclient.http_client.event_loop_thread import EventLoopThread
+from fixclient.async_client import FixClient as AsyncFixClient
+from fixclient.http_client.event_loop_thread import EventLoopThread
 import random
 import string
 from datetime import timedelta
@@ -53,7 +53,7 @@ except ImportError:
 
 FilenameLookup = Dict[str, str]
 
-log: logging.Logger = logging.getLogger("resotoclient")
+log: logging.Logger = logging.getLogger("fixclient")
 
 
 @define
@@ -100,7 +100,7 @@ class ClientState(Enum):
 T = TypeVar("T")
 
 
-class ResotoClient:
+class FixClient:
     """
     The ApiClient interacts with a running core instance via the REST interface.
     """
@@ -116,7 +116,7 @@ class ResotoClient:
         renew_certificate_before: timedelta = timedelta(days=1),
         renew_auth_token_before: timedelta = timedelta(minutes=5),
     ):
-        self.resotocore_url = url
+        self.fixcore_url = url
         self.psk = psk
         self.additional_headers = additional_headers
         self.custom_ca_cert_path = custom_ca_cert_path
@@ -130,9 +130,9 @@ class ResotoClient:
         self.state_lock = threading.Lock()
         self.client_state = ClientState.INITIALIZED
 
-        self.async_client: Optional[AsyncResotoClient] = None
+        self.async_client: Optional[AsyncFixClient] = None
 
-    def __enter__(self) -> "ResotoClient":
+    def __enter__(self) -> "FixClient":
         self.start()
         return self
 
@@ -155,8 +155,8 @@ class ResotoClient:
             while not self.event_loop_thread.running:
                 time.sleep(0.05)
 
-            self.async_client = AsyncResotoClient(
-                url=self.resotocore_url,
+            self.async_client = AsyncFixClient(
+                url=self.fixcore_url,
                 psk=self.psk,
                 additional_headers=self.additional_headers,
                 custom_ca_cert_path=self.custom_ca_cert_path,
@@ -188,7 +188,7 @@ class ResotoClient:
             except StopAsyncIteration:
                 break
 
-    def _await(self, awaitable: Callable[[AsyncResotoClient], Awaitable[T]]) -> T:
+    def _await(self, awaitable: Callable[[AsyncFixClient], Awaitable[T]]) -> T:
         # a cheap check to not invoke the state lock
         if self.client_state == ClientState.INITIALIZED:
             self.start()
@@ -198,7 +198,7 @@ class ResotoClient:
         else:
             raise RuntimeError("Client was not found")
 
-    def _iterator(self, async_iter: Callable[[AsyncResotoClient], AsyncIterator[T]]) -> Iterator[T]:
+    def _iterator(self, async_iter: Callable[[AsyncFixClient], AsyncIterator[T]]) -> Iterator[T]:
         # a cheap check to not invoke the state lock
         if self.client_state == ClientState.INITIALIZED:
             self.start()
@@ -226,7 +226,7 @@ class ResotoClient:
     def delete_graph(self, name: str, truncate: bool = False) -> str:
         return self._await(lambda c: c.delete_graph(name, truncate))
 
-    def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
+    def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "fix") -> JsObject:
         return self._await(lambda c: c.create_node(parent_node_id, node_id, node, graph))
 
     def patch_node(
@@ -234,57 +234,53 @@ class ResotoClient:
         node_id: str,
         node: JsObject,
         section: Optional[str] = None,
-        graph: str = "resoto",
+        graph: str = "fix",
     ) -> JsObject:
         return self._await(lambda c: c.patch_node(node_id, node, section, graph))
 
-    def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
+    def get_node(self, node_id: str, graph: str = "fix") -> JsObject:
         return self._await(lambda c: c.get_node(node_id, graph))
 
-    def delete_node(self, node_id: str, graph: str = "resoto") -> None:
+    def delete_node(self, node_id: str, graph: str = "fix") -> None:
         return self._await(lambda c: c.delete_node(node_id, graph))
 
-    def patch_nodes(self, nodes: List[JsObject], graph: str = "resoto") -> List[JsObject]:
+    def patch_nodes(self, nodes: List[JsObject], graph: str = "fix") -> List[JsObject]:
         return self._await(lambda c: c.patch_nodes(nodes, graph))
 
-    def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
+    def merge_graph(self, update: List[JsObject], graph: str = "fix") -> GraphUpdate:
         return self._await(lambda c: c.merge_graph(update, graph))
 
     def add_to_batch(
         self,
         update: List[JsObject],
         batch_id: Optional[str] = None,
-        graph: str = "resoto",
+        graph: str = "fix",
     ) -> Tuple[str, GraphUpdate]:
         return self._await(lambda c: c.add_to_batch(update, batch_id, graph))
 
-    def list_batches(self, graph: str = "resoto") -> List[JsObject]:
+    def list_batches(self, graph: str = "fix") -> List[JsObject]:
         return self._await(lambda c: c.list_batches(graph))
 
-    def commit_batch(self, batch_id: str, graph: str = "resoto") -> None:
+    def commit_batch(self, batch_id: str, graph: str = "fix") -> None:
         return self._await(lambda c: c.commit_batch(batch_id, graph))
 
-    def abort_batch(self, batch_id: str, graph: str = "resoto") -> None:
+    def abort_batch(self, batch_id: str, graph: str = "fix") -> None:
         return self._await(lambda c: c.abort_batch(batch_id, graph))
 
-    def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
+    def search_graph_raw(self, search: str, graph: str = "fix") -> JsObject:
         return self._await(lambda c: c.search_graph_raw(search, graph))
 
-    def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
+    def search_graph_explain(self, search: str, graph: str = "fix") -> EstimatedSearchCost:
         return self._await(lambda c: c.search_graph_explain(search, graph))
 
-    def search_list(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
-    ) -> Iterator[JsObject]:
+    def search_list(self, search: str, section: Optional[str] = "reported", graph: str = "fix") -> Iterator[JsObject]:
         return self._iterator(lambda c: c.search_list(search, section, graph))
 
-    def search_graph(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
-    ) -> Iterator[JsObject]:
+    def search_graph(self, search: str, section: Optional[str] = "reported", graph: str = "fix") -> Iterator[JsObject]:
         return self._iterator(lambda c: c.search_graph(search, section, graph))
 
     def search_aggregate(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "fix"
     ) -> Iterator[JsObject]:
         return self._iterator(lambda c: c.search_aggregate(search, section, graph))
 
@@ -309,15 +305,13 @@ class ResotoClient:
     def delete_subscriber(self, uid: str) -> None:
         return self._await(lambda c: c.delete_subscriber(uid))
 
-    def cli_evaluate(
-        self, command: str, graph: str = "resoto", **env: str
-    ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
+    def cli_evaluate(self, command: str, graph: str = "fix", **env: str) -> List[Tuple[ParsedCommands, List[JsObject]]]:
         return self._await(lambda c: c.cli_evaluate(command, graph, **env))
 
     def cli_execute_raw(
         self,
         command: str,
-        graph: Optional[str] = "resoto",
+        graph: Optional[str] = "fix",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
         files: Optional[FilenameLookup] = None,
@@ -337,7 +331,7 @@ class ResotoClient:
     def cli_execute(
         self,
         command: str,
-        graph: Optional[str] = "resoto",
+        graph: Optional[str] = "fix",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
         files: Optional[FilenameLookup] = None,
@@ -390,10 +384,10 @@ class ResotoClient:
         return self._await(lambda c: c.ready())
 
     def dataframe(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto", flatten: bool = True
+        self, search: str, section: Optional[str] = "reported", graph: str = "fix", flatten: bool = True
     ) -> DataFrame:
         if DataFrame is None:
-            raise ImportError("Python package resotoclient[extras] is not installed")
+            raise ImportError("Python package fixclient[extras] is not installed")
         aggregate_search = False
 
         if search.startswith("aggregate"):
@@ -461,12 +455,12 @@ class ResotoClient:
         self,
         search: str,
         section: Optional[str] = "reported",
-        graph: str = "resoto",
+        graph: str = "fix",
         engine: str = "sfdp",
         format: str = "svg",
     ) -> Digraph:
         if Digraph is None:
-            raise ImportError("Python package resotoclient[extras] is not installed")
+            raise ImportError("Python package fixclient[extras] is not installed")
 
         digraph = Digraph(comment=search)
         digraph.format = format

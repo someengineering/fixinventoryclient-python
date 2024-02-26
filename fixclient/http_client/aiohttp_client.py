@@ -6,11 +6,11 @@ from datetime import datetime, timedelta, timezone
 
 from aiohttp import WSMsgType
 
-from resotoclient.http_client import AsyncHttpClient
-from resotoclient.http_client import HttpResponse
+from fixclient.http_client import AsyncHttpClient
+from fixclient.http_client import HttpResponse
 from typing import Dict, Optional, Callable, Union, AsyncIterator, Awaitable, Any, Literal
-from resotoclient.models import JsValue, JsObject
-from resotoclient.jwt_utils import encode_jwt_to_headers, jwt_expiration
+from fixclient.models import JsValue, JsObject
+from fixclient.jwt_utils import encode_jwt_to_headers, jwt_expiration
 import aiohttp
 import ssl
 from yarl import URL

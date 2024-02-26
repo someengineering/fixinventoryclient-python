@@ -2,8 +2,8 @@ from typing import Any
 
 import jsons
 
-from resotoclient.json_utils import json_dump, json_load
-from resotoclient.models import Property, Kind, JsValue
+from fixclient.json_utils import json_dump, json_load
+from fixclient.models import Property, Kind, JsValue
 
 
 def __identity(obj: JsValue, *args: Any, **kwargs: Any) -> JsValue:
