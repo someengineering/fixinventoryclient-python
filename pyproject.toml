@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "fixclient"
-version = "1.6.2"
+version = "1.0.0"
 description = "Fix Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
