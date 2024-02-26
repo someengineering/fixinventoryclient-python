@@ -1,8 +1,8 @@
 import json
 import logging
 
-from resotoclient.http_client import HttpResponse
-from resotoclient.jwt_utils import encode_jwt_to_headers
+from fixclient.http_client import HttpResponse
+from fixclient.jwt_utils import encode_jwt_to_headers
 from typing import (
     Any,
     Dict,
@@ -14,9 +14,9 @@ from typing import (
     Type,
 )
 from types import TracebackType
-from resotoclient.json_utils import json_load, json_loadb, json_dump
-from resotoclient.ca import CertificatesHolder
-from resotoclient.models import (
+from fixclient.json_utils import json_load, json_loadb, json_dump
+from fixclient.ca import CertificatesHolder
+from fixclient.models import (
     Subscriber,
     Subscription,
     ParsedCommand,
@@ -29,7 +29,7 @@ from resotoclient.models import (
     Model,
     Kind,
 )
-from resotoclient.http_client.aiohttp_client import AioHttpClient, PoisonPill
+from fixclient.http_client.aiohttp_client import AioHttpClient, PoisonPill
 import random
 import string
 from datetime import timedelta
@@ -38,10 +38,10 @@ from aiohttp import MultipartWriter
 
 FilenameLookup = Dict[str, str]
 
-log: logging.Logger = logging.getLogger("resotoclient")
+log: logging.Logger = logging.getLogger("fixclient")
 
 
-class ResotoClient:
+class FixClient:
     """
     The ApiClient interacts with a running core instance via the REST interface.
     """
@@ -59,8 +59,8 @@ class ResotoClient:
         loop: Optional[AbstractEventLoop] = None,
     ):
         """
-        Create a new resoto client instance.
-        :param url: the url of the resotocore instance.
+        Create a new fix client instance.
+        :param url: the url of the fixcore instance.
         :param psk: the optional pre-shared key to use for authentication. The PSK is used to authenticate the client. If you do not have access to the PSK, you can use the auth_header parameter to authenticate with a JWT token.
         :param additional_headers: additional headers to send with each request.
         :param custom_ca_cert_path: path to a custom CA certificate to use for verifying the server certificate.
@@ -69,12 +69,12 @@ class ResotoClient:
         :param renew_auth_token_before: how long before the auth token expires to renew it.
         :param loop: the event loop to use.
         """
-        self.resotocore_url = url
+        self.fixcore_url = url
         self.psk = psk
         self.verify = verify
         self.session_id = rnd_str()
         self.holder = CertificatesHolder(
-            resotocore_url=url,
+            fixcore_url=url,
             psk=psk,
             custom_ca_cert_path=custom_ca_cert_path,
             renew_before=renew_certificate_before,
@@ -89,7 +89,7 @@ class ResotoClient:
             loop=loop,
         )
 
-    async def __aenter__(self) -> "ResotoClient":
+    async def __aenter__(self) -> "FixClient":
         await self.start()
         return self
 
@@ -148,10 +148,10 @@ class ResotoClient:
 
     async def model(self) -> Model:
         response: JsValue = await (await self._get("/model")).json()
-        # ResotoClient <= 2.2 returns a model dict fqn: kind.
+        # FixClient <= 2.2 returns a model dict fqn: kind.
         if isinstance(response, dict):
             return json_load(response, Model)
-        # ResotoClient > 2.2 returns a list of kinds.
+        # FixClient > 2.2 returns a list of kinds.
         elif isinstance(response, list):
             kinds = {kd.fqn: kd for k in response if (kd := json_load(k, Kind))}
             return Model(kinds)
@@ -183,7 +183,7 @@ class ResotoClient:
         # root node
         return await response.text()
 
-    async def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "resoto") -> JsObject:
+    async def create_node(self, parent_node_id: str, node_id: str, node: JsObject, graph: str = "fix") -> JsObject:
         response = await self._post(
             f"/graph/{graph}/node/{node_id}/under/{parent_node_id}",
             json=node,
@@ -198,7 +198,7 @@ class ResotoClient:
         node_id: str,
         node: JsObject,
         section: Optional[str] = None,
-        graph: str = "resoto",
+        graph: str = "fix",
     ) -> JsObject:
         section_path = f"/section/{section}" if section else ""
         response = await self._patch(
@@ -210,21 +210,21 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def get_node(self, node_id: str, graph: str = "resoto") -> JsObject:
+    async def get_node(self, node_id: str, graph: str = "fix") -> JsObject:
         response = await self._get(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 200:
             return await response.json()  # type: ignore
         else:
             raise AttributeError(await response.text())
 
-    async def delete_node(self, node_id: str, graph: str = "resoto") -> None:
+    async def delete_node(self, node_id: str, graph: str = "fix") -> None:
         response = await self._delete(f"/graph/{graph}/node/{node_id}")
         if response.status_code == 204:
             return None
         else:
             raise AttributeError(await response.text())
 
-    async def patch_nodes(self, nodes: List[JsObject], graph: str = "resoto") -> List[JsObject]:
+    async def patch_nodes(self, nodes: List[JsObject], graph: str = "fix") -> List[JsObject]:
         response = await self._patch(
             f"/graph/{graph}/nodes",
             json=nodes,
@@ -234,7 +234,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def merge_graph(self, update: List[JsObject], graph: str = "resoto") -> GraphUpdate:
+    async def merge_graph(self, update: List[JsObject], graph: str = "fix") -> GraphUpdate:
         response = await self._post(
             f"/graph/{graph}/merge",
             json=update,
@@ -248,7 +248,7 @@ class ResotoClient:
         self,
         update: List[JsObject],
         batch_id: Optional[str] = None,
-        graph: str = "resoto",
+        graph: str = "fix",
     ) -> Tuple[str, GraphUpdate]:
         props = {"batch_id": batch_id} if batch_id else None
         response = await self._post(
@@ -261,7 +261,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def list_batches(self, graph: str = "resoto") -> List[JsObject]:
+    async def list_batches(self, graph: str = "fix") -> List[JsObject]:
         response = await self._get(
             f"/graph/{graph}/batch",
         )
@@ -270,7 +270,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def commit_batch(self, batch_id: str, graph: str = "resoto") -> None:
+    async def commit_batch(self, batch_id: str, graph: str = "fix") -> None:
         response = await self._post(
             f"/graph/{graph}/batch/{batch_id}",
         )
@@ -279,7 +279,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def abort_batch(self, batch_id: str, graph: str = "resoto") -> None:
+    async def abort_batch(self, batch_id: str, graph: str = "fix") -> None:
         response = await self._delete(
             f"/graph/{graph}/batch/{batch_id}",
         )
@@ -288,7 +288,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def search_graph_raw(self, search: str, graph: str = "resoto") -> JsObject:
+    async def search_graph_raw(self, search: str, graph: str = "fix") -> JsObject:
         response = await self._post(
             f"/graph/{graph}/search/raw",
             data=search,
@@ -298,7 +298,7 @@ class ResotoClient:
         else:
             raise AttributeError(await response.text())
 
-    async def search_graph_explain(self, search: str, graph: str = "resoto") -> EstimatedSearchCost:
+    async def search_graph_explain(self, search: str, graph: str = "fix") -> EstimatedSearchCost:
         response = await self._post(
             f"/graph/{graph}/search/explain",
             data=search,
@@ -309,7 +309,7 @@ class ResotoClient:
             raise AttributeError(await response.text())
 
     async def search_list(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "fix"
     ) -> AsyncIterator[JsObject]:
         params: Dict[str, str] = {}
         if section:
@@ -323,7 +323,7 @@ class ResotoClient:
             raise AttributeError(await response.text())
 
     async def search_graph(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "fix"
     ) -> AsyncIterator[JsObject]:
         params: Dict[str, str] = {}
         if section:
@@ -336,7 +336,7 @@ class ResotoClient:
             raise AttributeError(await response.text())
 
     async def search_aggregate(
-        self, search: str, section: Optional[str] = "reported", graph: str = "resoto"
+        self, search: str, section: Optional[str] = "reported", graph: str = "fix"
     ) -> AsyncIterator[JsObject]:
         params: Dict[str, str] = {}
         if section:
@@ -416,7 +416,7 @@ class ResotoClient:
             raise AttributeError(await response.text())
 
     async def cli_evaluate(
-        self, command: str, graph: str = "resoto", **env: str
+        self, command: str, graph: str = "fix", **env: str
     ) -> List[Tuple[ParsedCommands, List[JsObject]]]:
         props = {"graph": graph, "section": "reported", **env}
         response = await self._post(
@@ -438,7 +438,7 @@ class ResotoClient:
     async def cli_execute_raw(
         self,
         command: str,
-        graph: Optional[str] = "resoto",
+        graph: Optional[str] = "fix",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
         files: Optional[FilenameLookup] = None,
@@ -464,7 +464,7 @@ class ResotoClient:
             )
             return response
         else:
-            headers["Resoto-Shell-Command"] = command
+            headers["Fix-Shell-Command"] = command
             headers["Content-Type"] = "multipart/form-data; boundary=file-upload"
 
             with MultipartWriter(boundary="file-upload") as mpwriter:
@@ -484,7 +484,7 @@ class ResotoClient:
     async def cli_execute(
         self,
         command: str,
-        graph: Optional[str] = "resoto",
+        graph: Optional[str] = "fix",
         section: Optional[str] = "reported",
         headers: Optional[Dict[str, str]] = None,
         files: Optional[FilenameLookup] = None,
