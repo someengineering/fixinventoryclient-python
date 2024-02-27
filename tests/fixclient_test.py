@@ -9,7 +9,7 @@ import time
 
 # noinspection PyUnresolvedReferences
 from tests import foo_kinds, create_graph, rnd_str
-from fixclient import FixClient
+from fixclient import FixInventoryClient
 from fixclient import models as rc
 from networkx import MultiDiGraph
 
@@ -29,7 +29,7 @@ def graph_to_json(graph: MultiDiGraph) -> List[rc.JsObject]:
 
 
 @fixture
-async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixClient]:
+async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixInventoryClient]:
     """
     Note: adding this fixture to a test: a complete fixcore process is started.
           The fixture ensures that the underlying process has entered the ready state.
@@ -58,7 +58,7 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixClient]:
                 raise AssertionError("Fixcore does not came up as expected")
 
     # wipe and cleanly import the test model
-    client = FixClient("https://localhost:8900", psk="changeme")
+    client = FixInventoryClient("https://localhost:8900", psk="changeme")
 
     # chech that connection is possible
     list(client.cli_execute("system info"))
@@ -73,13 +73,13 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixClient]:
 g = "graphtest"
 
 
-def test_system_api(core_client: FixClient) -> None:
+def test_system_api(core_client: FixInventoryClient) -> None:
     assert core_client.ping() == "pong"
     assert core_client.ready() == "ok"
     # make sure we get redirected to the api docs
 
 
-def test_model_api(core_client: FixClient) -> None:
+def test_model_api(core_client: FixInventoryClient) -> None:
     # PATCH /model
     string_kind: rc.Kind = rc.Kind(fqn="only_three", runtime_kind="string", properties=None, bases=None)
     setattr(string_kind, "min_length", 3)
@@ -94,7 +94,7 @@ def test_model_api(core_client: FixClient) -> None:
     assert (update.kinds.get("only_three") or none_kind).runtime_kind == "string"
 
 
-def test_graph_api(core_client: FixClient) -> None:
+def test_graph_api(core_client: FixInventoryClient) -> None:
     # make sure we have a clean slate
     with suppress(Exception):
         core_client.delete_graph(g)
@@ -207,7 +207,7 @@ def test_graph_api(core_client: FixClient) -> None:
     assert g not in core_client.list_graphs()
 
 
-def test_subscribers(core_client: FixClient) -> None:
+def test_subscribers(core_client: FixInventoryClient) -> None:
     # provide a clean slate
     for subscriber in core_client.subscribers():
         core_client.delete_subscriber(subscriber.id)
@@ -241,7 +241,7 @@ def test_subscribers(core_client: FixClient) -> None:
     assert sub is not None
 
 
-def test_cli(core_client: FixClient) -> None:
+def test_cli(core_client: FixInventoryClient) -> None:
     # make sure we have a clean slate
     with suppress(Exception):
         core_client.delete_graph(g)
@@ -275,7 +275,7 @@ def test_cli(core_client: FixClient) -> None:
     assert list(core_client.cli_execute('search is(foo) and id="我的第"', g)) == []
 
 
-def test_config(core_client: FixClient, foo_kinds: List[rc.Kind]) -> None:
+def test_config(core_client: FixInventoryClient, foo_kinds: List[rc.Kind]) -> None:
     # make sure we have a clean slate
     for config in core_client.configs():
         core_client.delete_config(config)

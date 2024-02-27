@@ -41,7 +41,7 @@ FilenameLookup = Dict[str, str]
 log: logging.Logger = logging.getLogger("fixclient")
 
 
-class FixClient:
+class FixInventoryClient:
     """
     The ApiClient interacts with a running core instance via the REST interface.
     """
@@ -89,7 +89,7 @@ class FixClient:
             loop=loop,
         )
 
-    async def __aenter__(self) -> "FixClient":
+    async def __aenter__(self) -> "FixInventoryClient":
         await self.start()
         return self
 
@@ -148,10 +148,10 @@ class FixClient:
 
     async def model(self) -> Model:
         response: JsValue = await (await self._get("/model")).json()
-        # FixClient <= 2.2 returns a model dict fqn: kind.
+        # FixInventoryClient <= 2.2 returns a model dict fqn: kind.
         if isinstance(response, dict):
             return json_load(response, Model)
-        # FixClient > 2.2 returns a list of kinds.
+        # FixInventoryClient > 2.2 returns a list of kinds.
         elif isinstance(response, list):
             kinds = {kd.fqn: kd for k in response if (kd := json_load(k, Kind))}
             return Model(kinds)
