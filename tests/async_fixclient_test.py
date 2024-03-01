@@ -5,11 +5,11 @@ from typing import List, AsyncIterator, Union
 from pytest import fixture, mark
 
 from fixclient import JsObject  # type: ignore
-from fixclient.async_client import FixClient
+from fixclient.async_client import FixInventoryClient
 
 
 @fixture
-async def core_client() -> AsyncIterator[FixClient]:
+async def core_client() -> AsyncIterator[FixInventoryClient]:
     """
     Note: adding this fixture to a test: a complete fixcore process is started.
           The fixture ensures that the underlying process has entered the ready state.
@@ -17,7 +17,7 @@ async def core_client() -> AsyncIterator[FixClient]:
     """
 
     # wipe and cleanly import the test model
-    client = FixClient("https://localhost:8900", psk="changeme")
+    client = FixInventoryClient("https://localhost:8900", psk="changeme")
 
     count = 10
     ready: Union[bool, str] = False
@@ -36,7 +36,7 @@ async def core_client() -> AsyncIterator[FixClient]:
 
 
 @mark.asyncio
-async def test_listen_to_events(core_client: FixClient) -> None:
+async def test_listen_to_events(core_client: FixInventoryClient) -> None:
     received: List[JsObject] = []
     send_queue: Queue[JsObject] = Queue()
     messages: List[JsObject] = [dict(kind="event", message_type="test", data={"foo": i}) for i in range(5)]

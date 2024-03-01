@@ -27,7 +27,7 @@ from fixclient.models import (
     Model,
     Kind,
 )
-from fixclient.async_client import FixClient as AsyncFixClient
+from fixclient.async_client import FixInventoryClient as AsyncFixClient
 from fixclient.http_client.event_loop_thread import EventLoopThread
 import random
 import string
@@ -100,7 +100,7 @@ class ClientState(Enum):
 T = TypeVar("T")
 
 
-class FixClient:
+class FixInventoryClient:
     """
     The ApiClient interacts with a running core instance via the REST interface.
     """
@@ -132,7 +132,7 @@ class FixClient:
 
         self.async_client: Optional[AsyncFixClient] = None
 
-    def __enter__(self) -> "FixClient":
+    def __enter__(self) -> "FixInventoryClient":
         self.start()
         return self
 

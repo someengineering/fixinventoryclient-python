@@ -1,23 +1,23 @@
-# fixclient-python
-Python client for Fix
+# fixinventoryclient-python
+Python client for Fix Inventory
 
 ## Installation
 ```bash
-pip install fixclient
+pip install fixinventoryclient
 ```
 
 For GraphVis and Pandas support:
 
 ```bash
-pip install fixclient[extras]
+pip install fixinventoryclient[extras]
 ```
 
 ## Usage
 
 ```python
-from fixclient import FixClient
+from fixclient import FixInventoryClient
 
-client = FixClient(url="https://localhost:8900", psk="changeme")
+client = FixInventoryClient(url="https://localhost:8900", psk="changeme")
 instances_csv = client.cli_execute("search is(instance) | tail 5 | list --csv")
 
 for instance in instances_csv:
