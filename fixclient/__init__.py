@@ -208,11 +208,11 @@ class FixInventoryClient:
         else:
             raise RuntimeError("Client was not found")
 
-    def model(self) -> Model:
-        return self._await(lambda c: c.model())
+    def model(self, graph_name: str = "fix") -> Model:
+        return self._await(lambda c: c.model(graph_name))
 
-    def update_model(self, update: List[Kind]) -> Model:
-        return self._await(lambda c: c.update_model(update))
+    def update_model(self, update: List[Kind], graph_name: str = "fix") -> Model:
+        return self._await(lambda c: c.update_model(update, graph_name))
 
     def list_graphs(self) -> Set[str]:
         return self._await(lambda c: c.list_graphs())
