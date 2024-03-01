@@ -1,4 +1,4 @@
-name: Test and publish (resotoclient)
+name: Test and publish (fixclient)
 on:
   push:
     branches:
