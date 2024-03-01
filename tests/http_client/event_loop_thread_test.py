@@ -1,4 +1,4 @@
-from resotoclient.http_client.event_loop_thread import EventLoopThread
+from fixclient.http_client.event_loop_thread import EventLoopThread
 import asyncio
 
 

@@ -69,5 +69,5 @@ jobs:
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           user: __token__
-          password: ${{ secrets.PYPI_RESOTOCLIENT }}
+          password: ${{ secrets.PYPI_FIXINVENTORYCLIENT }}
           packages_dir: ./dist/

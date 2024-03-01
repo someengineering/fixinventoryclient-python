@@ -4,20 +4,20 @@ from typing import List, AsyncIterator, Union
 
 from pytest import fixture, mark
 
-from resotoclient import JsObject  # type: ignore
-from resotoclient.async_client import ResotoClient
+from fixclient import JsObject  # type: ignore
+from fixclient.async_client import FixInventoryClient
 
 
 @fixture
-async def core_client() -> AsyncIterator[ResotoClient]:
+async def core_client() -> AsyncIterator[FixInventoryClient]:
     """
-    Note: adding this fixture to a test: a complete resotocore process is started.
+    Note: adding this fixture to a test: a complete fixcore process is started.
           The fixture ensures that the underlying process has entered the ready state.
           It also ensures to clean up the process, when the test is done.
     """
 
     # wipe and cleanly import the test model
-    client = ResotoClient("https://localhost:8900", psk="changeme")
+    client = FixInventoryClient("https://localhost:8900", psk="changeme")
 
     count = 10
     ready: Union[bool, str] = False
@@ -29,14 +29,14 @@ async def core_client() -> AsyncIterator[ResotoClient]:
             print("failed to connect", e)
             count -= 1
             if count == 0:
-                raise AssertionError("Resotocore does not came up as expected")
+                raise AssertionError("Fixcore does not came up as expected")
 
     yield client
     await client.shutdown()
 
 
 @mark.asyncio
-async def test_listen_to_events(core_client: ResotoClient) -> None:
+async def test_listen_to_events(core_client: FixInventoryClient) -> None:
     received: List[JsObject] = []
     send_queue: Queue[JsObject] = Queue()
     messages: List[JsObject] = [dict(kind="event", message_type="test", data={"foo": i}) for i in range(5)]

@@ -1,14 +1,14 @@
 [tool.poetry]
-name = "resotoclient"
-version = "1.6.2"
-description = "Resoto Python client library"
+name = "fixinventoryclient"
+version = "2.0.0"
+description = "Fix Inventory Python client library"
 authors = ["Some Engineering Inc."]
 license = "Apache-2.0"
 readme = "README.md"
-homepage = "https://github.com/someengineering/resotoclient-python"
-repository = "https://github.com/someengineering/resotoclient-python"
+homepage = "https://github.com/someengineering/fixinventoryclient-python"
+repository = "https://github.com/someengineering/fixinventoryclient-python"
 packages = [
-    { include = "resotoclient" },
+    { include = "fixclient" },
 ]
 classifiers = [
     # Current project status
@@ -31,7 +31,7 @@ classifiers = [
 ]
 
 [tool.poetry.urls]
-Changelog = "https://github.com/someengineering/resotoclient-python/releases"
+Changelog = "https://github.com/someengineering/fixinventoryclient-python/releases"
 
 [tool.poetry.dependencies]
 python = "^3.9"
@@ -63,7 +63,7 @@ six = ">=1.16.0"
 pytest-asyncio = ">=0.19.0"
 
 [tool.pyright]
-include = ["resotoclient", "tests"]
+include = ["fixclient", "tests"]
 exclude = ["**/node_modules",
     "**/__pycache__"
 ]

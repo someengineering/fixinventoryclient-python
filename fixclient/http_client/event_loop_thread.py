@@ -16,7 +16,7 @@ class EventLoopThread(threading.Thread):
 
     Example:
 
-    >>> from resotoclient.event_loop_thread import EventLoopThread
+    >>> from fixclient.event_loop_thread import EventLoopThread
     thread = EventLoopThread()
     thread.start()
     thread.run_coroutine(async_function())
