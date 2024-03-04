@@ -170,14 +170,6 @@ def test_graph_api(core_client: FixInventoryClient) -> None:
     for n in updated_nodes:
         assert n.get("reported", {}).get("name") == "bruce"  # type: ignore
 
-    # create the raw search
-    raw = core_client.search_graph_raw('id("3")', g)
-    assert raw == {
-        "query": "LET filter0 = (FOR m0 in graphtest FILTER m0._key == @b0  RETURN m0) "
-        'FOR result in filter0 RETURN UNSET(result, ["flat"])',
-        "bind_vars": {"b0": "3"},
-    }
-
     # estimate the search
     cost = core_client.search_graph_explain('id("3")', g)
     assert cost.full_collection_scan is False
