@@ -38,7 +38,7 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixInventoryCli
 
     async def core_ready() -> bool:
         async with ClientSession() as session:
-            async with session.get("https://localhost:8900/system/ready", ssl=False) as resp:
+            async with session.get("https://fixcore:8900/system/ready", ssl=False) as resp:
                 return resp.status == 200
 
     # test_db.collection("model").truncate()
@@ -58,7 +58,7 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixInventoryCli
                 raise AssertionError("Fixcore does not came up as expected")
 
     # wipe and cleanly import the test model
-    client = FixInventoryClient("https://localhost:8900", psk="changeme")
+    client = FixInventoryClient("https://fixcore:8900", psk="changeme")
 
     # chech that connection is possible
     list(client.cli_execute("system info"))
