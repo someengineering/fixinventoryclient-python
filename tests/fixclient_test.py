@@ -63,7 +63,13 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixInventoryCli
     # chech that connection is possible
     list(client.cli_execute("system info"))
 
+    # fix is the default name of the graph for many calls
+    # let's create it first
+    client.create_graph("fix")
     client.update_model(foo_kinds)
+    # graphtest needs to have the model too.
+    client.create_graph(g)
+    client.update_model(foo_kinds, g)
 
     yield client
 
