@@ -12,7 +12,7 @@ import logging
 from logging import Logger
 from typing import Optional, Mapping, Tuple
 import asyncio
-from datetime import timedelta, datetime
+from datetime import timedelta, datetime, timezone
 from threading import Lock, Thread, Condition, Event
 from ssl import SSLContext, create_default_context, Purpose
 import certifi
@@ -160,7 +160,7 @@ class CertificatesHolder:
             with self.__exit:
                 if self.__loaded.is_set():
                     cert = self.__ca_cert
-                    if isinstance(cert, Certificate) and cert.not_valid_after < datetime.utcnow() - self.__renew_before:
+                    if isinstance(cert, Certificate) and cert.not_valid_after_utc < datetime.now(timezone.utc) - self.__renew_before:
                         asyncio.run(self.reload())
                 if self.__exit.wait(60):
                     break
