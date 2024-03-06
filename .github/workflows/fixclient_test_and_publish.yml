@@ -32,19 +32,10 @@ jobs:
         env:
           FIXCORE_ANALYTICS_OPT_OUT: true
           FIXCORE_GRAPHDB_SERVER: http://arangodb:8529
-          FIXCORE_OVERRIDE0: "fixcore.api.web_hosts=0.0.0.0"
-          FIXCORE_OVERRIDE1: "fixcore.api.host_certificate.common_name=fixcore"
-          FIXCORE_OVERRIDE2: "fixcore.api.host_certificate.san_dns_names=fixcore"
-          FIXCORE_OVERRIDE3: "fixcore.runtime.start_collect_on_subscriber_connect=true"
-          FIXCORE_PSK: changeme
+          FIXCORE_OVERRIDE: "fixcore.api.web_hosts=0.0.0.0"
+          FIXCORE_PSK: "changeme"
         ports:
           - 8900:8900
-      fixworker:
-        image: somecr.io/someengineering/fixworker:4.0.0
-        env:
-          FIXWORKER_FIXCORE_URI: https://fixcore:8900
-          FIXWORKER_OVERRIDE: "fixworker.collector=example"
-          FIXWORKER_PSK: changeme
     steps:
       - name: Checkout
         uses: actions/checkout@v4
