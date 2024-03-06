@@ -33,7 +33,6 @@ jobs:
           FIXCORE_ANALYTICS_OPT_OUT: true
           FIXCORE_GRAPHDB_SERVER: http://arangodb:8529
           FIXCORE_OVERRIDE: "fixcore.api.web_hosts=0.0.0.0"
-          FIXCORE_PSK: "changeme"
         ports:
           - 8900:8900
 
