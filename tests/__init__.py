@@ -1,6 +1,6 @@
 """Test suite for the fixclient package."""
 from abc import ABC
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from typing import List, Optional, Set, Any, Dict
 from collections import namedtuple
 
@@ -14,7 +14,7 @@ import jsons
 
 
 def utc() -> datetime:
-    return datetime.utcnow()
+    return datetime.now(timezone.utc)
 
 
 class EdgeType:

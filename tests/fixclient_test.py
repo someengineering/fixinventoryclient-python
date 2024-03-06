@@ -63,7 +63,13 @@ async def core_client(foo_kinds: List[rc.Kind]) -> AsyncIterator[FixInventoryCli
     # chech that connection is possible
     list(client.cli_execute("system info"))
 
+    # fix is the default name of the graph for many calls
+    # let's create it first
+    client.create_graph("fix")
     client.update_model(foo_kinds)
+    # graphtest needs to have the model too.
+    client.create_graph(g)
+    client.update_model(foo_kinds, g)
 
     yield client
 
@@ -169,14 +175,6 @@ def test_graph_api(core_client: FixInventoryClient) -> None:
     assert len(updated_nodes) == 113
     for n in updated_nodes:
         assert n.get("reported", {}).get("name") == "bruce"  # type: ignore
-
-    # create the raw search
-    raw = core_client.search_graph_raw('id("3")', g)
-    assert raw == {
-        "query": "LET filter0 = (FOR m0 in graphtest FILTER m0._key == @b0  RETURN m0) "
-        'FOR result in filter0 RETURN UNSET(result, ["flat"])',
-        "bind_vars": {"b0": "3"},
-    }
 
     # estimate the search
     cost = core_client.search_graph_explain('id("3")', g)

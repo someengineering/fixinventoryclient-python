@@ -146,8 +146,8 @@ class FixInventoryClient:
     async def _delete(self, path: str, params: Optional[Dict[str, str]] = None) -> HttpResponse:
         return await self.http_client.delete(path, params)
 
-    async def model(self) -> Model:
-        response: JsValue = await (await self._get("/model")).json()
+    async def model(self, graph_name: str = "fix") -> Model:
+        response: JsValue = await (await self._get(f"/graph/{graph_name}/model")).json()
         # FixInventoryClient <= 2.2 returns a model dict fqn: kind.
         if isinstance(response, dict):
             return json_load(response, Model)
@@ -158,8 +158,8 @@ class FixInventoryClient:
         else:
             raise ValueError(f"Can not map to model. Unexpected response: {response}")
 
-    async def update_model(self, update: List[Kind]) -> Model:
-        response = await self._patch("/model", json=json_dump(update, List[Kind]))
+    async def update_model(self, update: List[Kind], graph_name: str = "fix") -> Model:
+        response = await self._patch(f"/graph/{graph_name}/model", json=json_dump(update, List[Kind]))
         model_json = await response.json()
         model = json_load(model_json, Model)
         return model

@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+
+    volumes:
+      - ../..:/workspaces:cached
+      - ${HOME}/.ssh:/home/vscode/.ssh
+
+    # Overrides default command so things don't shut down after the process ends.
+    command: sleep infinity
+
+  resotocore:
+    image: somecr.io/someengineering/fixcore:4.0.0
+    network_mode: service:app
+    environment:
+      RESOTOCORE_ANALYTICS_OPT_OUT: true
+      RESOTOCORE_OVERRIDE: "resotocore.api.web_hosts=0.0.0.0"
+  arangodb:
+    image: arangodb:3.10.5
+    network_mode: service:app
+    environment:
+      ARANGO_NO_AUTH: 1
